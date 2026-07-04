@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { InteractiveRobotSpline } from '@/components/ui/interactive-3d-robot'
 import { Button } from '@/components/ui/button'
 
@@ -52,12 +53,12 @@ export function Section() {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pointer-events-auto">
-            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 text-lg rounded-full shadow-lg shadow-blue-500/30 transition-transform hover:scale-105">
+            <Link href="/register" className="inline-flex items-center justify-center h-11 px-8 text-lg font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg shadow-blue-500/30 transition-transform hover:scale-105">
               Start Tracking for Free
-            </Button>
-            <Button size="lg" variant="outline" className="text-white border-white/30 hover:bg-white/10 px-8 text-lg rounded-full backdrop-blur-sm transition-transform hover:scale-105">
+            </Link>
+            <Link href="#features" className="inline-flex items-center justify-center h-11 px-8 text-lg font-medium text-white border border-white/30 hover:bg-white/10 rounded-full backdrop-blur-sm transition-transform hover:scale-105">
               See How It Works
-            </Button>
+            </Link>
           </div>
         </div>
       </div>
