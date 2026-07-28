@@ -3,6 +3,7 @@
     "dev": "npx -y concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix client\"",
     "dev:backend": "npm run dev --prefix backend",
     "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
     "install:all": "npm install && npm install --prefix backend && npm install --prefix client"
   },
   "dependencies": {
