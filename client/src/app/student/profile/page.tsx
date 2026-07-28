@@ -67,10 +67,10 @@ export default function ProfilePage() {
 
     try {
       const [profileRes, skillsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/v1/students/me/profile', {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:5000/api/v1/students/me/skills', {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -117,7 +117,7 @@ export default function ProfilePage() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/profile', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/profile`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -172,7 +172,7 @@ export default function ProfilePage() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/avatar', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/avatar`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -211,7 +211,7 @@ export default function ProfilePage() {
     const token = localStorage.getItem('token');
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -242,7 +242,7 @@ export default function ProfilePage() {
     const token = localStorage.getItem('token');
     
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/skills', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -265,7 +265,7 @@ export default function ProfilePage() {
   const handleRemoveSkill = async (skillId: number) => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:5000/api/v1/students/me/skills/${skillId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills/${skillId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

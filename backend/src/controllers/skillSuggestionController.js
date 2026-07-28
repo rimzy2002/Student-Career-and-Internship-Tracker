@@ -1,4 +1,4 @@
-const { pool } = require('../config/db');
+const { supabase } = require('../config/supabase');
 
 exports.getSuggestions = async (req, res) => {
   const { text } = req.body;
@@ -64,14 +64,15 @@ exports.getSuggestions = async (req, res) => {
     }
 
     // 2. Cross-reference with our database skills
-    const [dbSkills] = await pool.query('SELECT * FROM skills');
+    const { data: dbSkills, error: dbError } = await supabase.from('skills').select('*');
+    if (dbError) throw dbError;
     
     const matched_skills = [];
     const new_skills = [];
 
     // Case-insensitive mapping for easy lookup
     const dbSkillsMap = new Map(
-      dbSkills.map(sk => [sk.name.toLowerCase(), sk])
+      (dbSkills || []).map(sk => [sk.name.toLowerCase(), sk])
     );
 
     for (const skillName of suggestedSkillNames) {

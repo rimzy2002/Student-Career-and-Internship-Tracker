@@ -1,5 +1,12 @@
 {
+  "scripts": {
+    "dev": "npx -y concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix client\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:client": "npm run dev --prefix client",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix client"
+  },
   "dependencies": {
+    "@supabase/server": "^1.4.1",
     "firebase": "^12.16.0"
   }
 }

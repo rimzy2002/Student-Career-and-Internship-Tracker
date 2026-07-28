@@ -1,4 +1,4 @@
-const { pool } = require('../config/db');
+const { supabase } = require('../config/supabase');
 
 exports.createApplication = async (req, res) => {
   const studentId = req.user.userId;
@@ -8,42 +8,58 @@ exports.createApplication = async (req, res) => {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    // 1. Insert application (current_status_id = 1 is 'Applied')
+    const { data: appResult, error: appError } = await supabase
+      .from('applications')
+      .insert([
+        {
+          student_id: studentId,
+          company_name,
+          role_title,
+          current_status_id: 1,
+          date_applied,
+          notes: notes || null
+        }
+      ])
+      .select('id')
+      .single();
 
-    // 1. Insert application (assuming current_status_id = 1 is 'Applied')
-    const [result] = await connection.query(
-      'INSERT INTO applications (student_id, company_name, role_title, current_status_id, date_applied, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      [studentId, company_name, role_title, 1, date_applied, notes || null]
-    );
+    if (appError) throw appError;
 
-    const applicationId = result.insertId;
+    const applicationId = appResult.id;
 
     // 2. Insert into application_status_history
-    const changedAt = new Date();
-    await connection.query(
-      'INSERT INTO application_status_history (application_id, status_id, notes, changed_at) VALUES (?, ?, ?, ?)',
-      [applicationId, 1, 'Initial application added', changedAt]
-    );
+    const { error: histError } = await supabase
+      .from('application_status_history')
+      .insert([
+        {
+          application_id: applicationId,
+          status_id: 1,
+          notes: 'Initial application added',
+          changed_at: new Date().toISOString()
+        }
+      ]);
+
+    if (histError) console.error('Error logging status history:', histError);
 
     // 3. Insert skills into application_skills if provided
     if (skill_ids && Array.isArray(skill_ids) && skill_ids.length > 0) {
-      const skillValues = skill_ids.map(skillId => [applicationId, skillId]);
-      await connection.query(
-        'INSERT INTO application_skills (application_id, skill_id) VALUES ?',
-        [skillValues]
-      );
+      const skillRows = skill_ids.map(skillId => ({
+        application_id: applicationId,
+        skill_id: skillId
+      }));
+      const { error: skillError } = await supabase
+        .from('application_skills')
+        .insert(skillRows);
+
+      if (skillError) console.error('Error inserting application skills:', skillError);
     }
 
-    await connection.commit();
     res.status(201).json({ message: 'Application created successfully', applicationId });
   } catch (error) {
-    await connection.rollback();
     console.error('createApplication error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.release();
   }
 };
 
@@ -51,16 +67,21 @@ exports.getApplications = async (req, res) => {
   const studentId = req.user.userId;
 
   try {
-    // VERIFY against schema.sql: Select applications joined with status
-    const [applications] = await pool.query(
-      `SELECT a.*, s.name as current_status_name 
-       FROM applications a
-       LEFT JOIN application_statuses s ON a.current_status_id = s.id
-       WHERE a.student_id = ? AND a.deleted_at IS NULL`,
-      [studentId]
-    );
+    const { data: applications, error } = await supabase
+      .from('applications')
+      .select('*, application_statuses(name)')
+      .eq('student_id', studentId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
 
-    res.status(200).json(applications);
+    if (error) throw error;
+
+    const formattedApps = (applications || []).map(app => ({
+      ...app,
+      current_status_name: app.application_statuses ? app.application_statuses.name : 'Applied'
+    }));
+
+    res.status(200).json(formattedApps);
   } catch (error) {
     console.error('getApplications error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -76,47 +97,48 @@ exports.updateApplicationStatus = async (req, res) => {
     return res.status(400).json({ message: 'Missing status_id' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-
     // 1. Verify ownership
-    // VERIFY against schema.sql: Check application ownership
-    const [applications] = await connection.query(
-      'SELECT id FROM applications WHERE id = ? AND student_id = ? AND deleted_at IS NULL FOR UPDATE',
-      [applicationId, studentId]
-    );
+    const { data: apps, error: checkError } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('id', applicationId)
+      .eq('student_id', studentId)
+      .is('deleted_at', null);
 
-    if (applications.length === 0) {
-      await connection.rollback();
-      // Return 404 to avoid leaking existence of other students' applications
+    if (checkError) throw checkError;
+
+    if (!apps || apps.length === 0) {
       return res.status(404).json({ message: 'Application not found' });
     }
 
     // 2. Update current_status_id on application
-    // VERIFY against schema.sql: Update applications table
-    await connection.query(
-      'UPDATE applications SET current_status_id = ? WHERE id = ?',
-      [status_id, applicationId]
-    );
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({ current_status_id: status_id, updated_at: new Date().toISOString() })
+      .eq('id', applicationId);
+
+    if (updateError) throw updateError;
 
     // 3. Insert into application_status_history
-    // VERIFY against schema.sql: Insert into application_status_history
-    const changedAt = new Date(); // or use CURRENT_TIMESTAMP in SQL
-    await connection.query(
-      'INSERT INTO application_status_history (application_id, status_id, notes, changed_at) VALUES (?, ?, ?, ?)',
-      [applicationId, status_id, notes || null, changedAt]
-    );
+    const { error: histError } = await supabase
+      .from('application_status_history')
+      .insert([
+        {
+          application_id: applicationId,
+          status_id: status_id,
+          notes: notes || null,
+          changed_at: new Date().toISOString()
+        }
+      ]);
 
-    await connection.commit();
+    if (histError) throw histError;
+
     res.status(200).json({ message: 'Application status updated successfully' });
 
   } catch (error) {
-    await connection.rollback();
     console.error('updateApplicationStatus error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.release();
   }
 };
 
@@ -126,26 +148,34 @@ exports.getApplicationHistory = async (req, res) => {
 
   try {
     // 1. Verify ownership and not deleted
-    const [applications] = await pool.query(
-      'SELECT id FROM applications WHERE id = ? AND student_id = ? AND deleted_at IS NULL',
-      [applicationId, studentId]
-    );
+    const { data: apps, error: checkError } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('id', applicationId)
+      .eq('student_id', studentId)
+      .is('deleted_at', null);
 
-    if (applications.length === 0) {
+    if (checkError) throw checkError;
+
+    if (!apps || apps.length === 0) {
       return res.status(404).json({ message: 'Application not found' });
     }
 
     // 2. Fetch history
-    const [history] = await pool.query(
-      `SELECT h.*, s.name as status_name 
-       FROM application_status_history h
-       LEFT JOIN application_statuses s ON h.status_id = s.id
-       WHERE h.application_id = ? 
-       ORDER BY h.changed_at DESC`,
-      [applicationId]
-    );
+    const { data: history, error: histError } = await supabase
+      .from('application_status_history')
+      .select('*, application_statuses(name)')
+      .eq('application_id', applicationId)
+      .order('changed_at', { ascending: false });
 
-    res.status(200).json(history);
+    if (histError) throw histError;
+
+    const formattedHistory = (history || []).map(item => ({
+      ...item,
+      status_name: item.application_statuses ? item.application_statuses.name : ''
+    }));
+
+    res.status(200).json(formattedHistory);
   } catch (error) {
     console.error('getApplicationHistory error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -157,44 +187,46 @@ exports.updateApplicationSkills = async (req, res) => {
   const applicationId = req.params.id;
   const { skill_ids } = req.body;
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-
     // 1. Verify ownership and not deleted
-    const [applications] = await connection.query(
-      'SELECT id FROM applications WHERE id = ? AND student_id = ? AND deleted_at IS NULL FOR UPDATE',
-      [applicationId, studentId]
-    );
+    const { data: apps, error: checkError } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('id', applicationId)
+      .eq('student_id', studentId)
+      .is('deleted_at', null);
 
-    if (applications.length === 0) {
-      await connection.rollback();
+    if (checkError) throw checkError;
+
+    if (!apps || apps.length === 0) {
       return res.status(404).json({ message: 'Application not found' });
     }
 
     // 2. Delete existing skills
-    await connection.query(
-      'DELETE FROM application_skills WHERE application_id = ?',
-      [applicationId]
-    );
+    const { error: delError } = await supabase
+      .from('application_skills')
+      .delete()
+      .eq('application_id', applicationId);
+
+    if (delError) throw delError;
 
     // 3. Re-insert new skills
     if (skill_ids && Array.isArray(skill_ids) && skill_ids.length > 0) {
-      const skillValues = skill_ids.map(skillId => [applicationId, skillId]);
-      await connection.query(
-        'INSERT INTO application_skills (application_id, skill_id) VALUES ?',
-        [skillValues]
-      );
+      const skillRows = skill_ids.map(skillId => ({
+        application_id: applicationId,
+        skill_id: skillId
+      }));
+      const { error: insError } = await supabase
+        .from('application_skills')
+        .insert(skillRows);
+
+      if (insError) throw insError;
     }
 
-    await connection.commit();
     res.status(200).json({ message: 'Skills updated successfully' });
   } catch (error) {
-    await connection.rollback();
     console.error('updateApplicationSkills error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.release();
   }
 };
 
@@ -203,12 +235,17 @@ exports.archiveApplication = async (req, res) => {
   const applicationId = req.params.id;
 
   try {
-    const [result] = await pool.query(
-      'UPDATE applications SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND student_id = ? AND deleted_at IS NULL',
-      [applicationId, studentId]
-    );
+    const { data, error } = await supabase
+      .from('applications')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', applicationId)
+      .eq('student_id', studentId)
+      .is('deleted_at', null)
+      .select('id');
 
-    if (result.affectedRows === 0) {
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
       return res.status(404).json({ message: 'Application not found' });
     }
 
@@ -218,4 +255,3 @@ exports.archiveApplication = async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
-

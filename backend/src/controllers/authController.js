@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { pool } = require('../config/db');
+const { supabase } = require('../config/supabase');
 
 exports.register = async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
@@ -9,34 +9,46 @@ exports.register = async (req, res) => {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    // 1. Check for duplicate email in users table
+    const { data: existingUsers, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email);
 
-    // VERIFY against schema.sql: Check for duplicate email in users table
-    const [existingUsers] = await connection.query(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
-    );
+    if (checkError) throw checkError;
 
-    if (existingUsers.length > 0) {
-      await connection.rollback();
+    if (existingUsers && existingUsers.length > 0) {
       return res.status(409).json({ message: 'Email already exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Insert into users table
-    const [userResult] = await connection.query(
-      'INSERT INTO users (first_name, last_name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-      [firstName, lastName, email, passwordHash, 'student']
-    );
+    // 2. Insert into users table
+    const { data: userResult, error: insertError } = await supabase
+      .from('users')
+      .insert([
+        {
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          password_hash: passwordHash,
+          role: 'student'
+        }
+      ])
+      .select('id')
+      .single();
 
-    const userId = userResult.insertId;
+    if (insertError) {
+      if (insertError.code === '23505') {
+        return res.status(409).json({ message: 'Email already exists' });
+      }
+      throw insertError;
+    }
 
-    await connection.commit();
+    const userId = userResult.id;
 
-    // Generate JWT
+    // 3. Generate JWT
     const token = jwt.sign(
       { userId, role: 'student' },
       process.env.JWT_SECRET,
@@ -50,11 +62,8 @@ exports.register = async (req, res) => {
     });
 
   } catch (error) {
-    await connection.rollback();
     console.error('Registration error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.release();
   }
 };
 
@@ -66,13 +75,15 @@ exports.login = async (req, res) => {
   }
 
   try {
-    // VERIFY against schema.sql: Select user by email
-    const [users] = await pool.query(
-      'SELECT id, first_name, last_name, email, password_hash, role FROM users WHERE email = ? AND deleted_at IS NULL',
-      [email]
-    );
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, email, password_hash, role')
+      .eq('email', email)
+      .is('deleted_at', null);
 
-    if (users.length === 0) {
+    if (error) throw error;
+
+    if (!users || users.length === 0) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
@@ -109,38 +120,40 @@ exports.googleLogin = async (req, res) => {
     return res.status(400).json({ message: 'Missing email or name from Google payload' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    const { data: existingUsers, error: selectError } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('email', email);
 
-    const [existingUsers] = await connection.query(
-      'SELECT id, email, role FROM users WHERE email = ?',
-      [email]
-    );
+    if (selectError) throw selectError;
 
     let user;
 
-    if (existingUsers.length > 0) {
+    if (existingUsers && existingUsers.length > 0) {
       // User exists, just log them in
       user = existingUsers[0];
     } else {
       // User doesn't exist, create a new student account
-      // We generate a random impossible password hash since they use Google to sign in
       const randomPasswordHash = await bcrypt.hash(Math.random().toString(36), 10);
       
-      const [insertResult] = await connection.query(
-        'INSERT INTO users (first_name, last_name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
-        [firstName, lastName || '', email, randomPasswordHash, 'student']
-      );
-      
-      user = {
-        id: insertResult.insertId,
-        email,
-        role: 'student'
-      };
-    }
+      const { data: insertResult, error: insertError } = await supabase
+        .from('users')
+        .insert([
+          {
+            first_name: firstName,
+            last_name: lastName || '',
+            email: email,
+            password_hash: randomPasswordHash,
+            role: 'student'
+          }
+        ])
+        .select('id, email, role')
+        .single();
 
-    await connection.commit();
+      if (insertError) throw insertError;
+      user = insertResult;
+    }
 
     const token = jwt.sign(
       { userId: user.id, role: user.role },
@@ -155,10 +168,7 @@ exports.googleLogin = async (req, res) => {
     });
 
   } catch (error) {
-    await connection.rollback();
     console.error('Google login error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
-  } finally {
-    connection.release();
   }
 };

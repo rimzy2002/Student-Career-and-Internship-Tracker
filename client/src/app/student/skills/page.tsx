@@ -57,7 +57,7 @@ export default function SkillsTrackerPage() {
 
   const fetchMySkills = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/skills', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
         headers: getHeaders()
       });
       if (res.ok) {
@@ -73,7 +73,7 @@ export default function SkillsTrackerPage() {
 
   const fetchMasterSkills = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/v1/skills');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/skills`);
       if (res.ok) {
         const data = await res.json();
         setMasterSkills(data || []);
@@ -91,7 +91,7 @@ export default function SkillsTrackerPage() {
 
     setIsAddingManual(true);
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/skills', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ skill_id: selectedSkillId })
@@ -113,7 +113,7 @@ export default function SkillsTrackerPage() {
     setMySkills(prev => prev.filter(s => s.id !== skillId));
 
     try {
-      const res = await fetch(`http://localhost:5000/api/v1/students/me/skills/${skillId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills/${skillId}`, {
         method: 'DELETE',
         headers: getHeaders()
       });
@@ -138,7 +138,7 @@ export default function SkillsTrackerPage() {
     setNewSkills([]);
 
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/skill-suggestions', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skill-suggestions`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ text: aiText })
@@ -172,7 +172,7 @@ export default function SkillsTrackerPage() {
     setMatchedSkills(prev => prev.filter(s => s.id !== skill.id));
     
     try {
-      const res = await fetch('http://localhost:5000/api/v1/students/me/skills', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ skill_id: skill.id })

@@ -34,7 +34,7 @@ export default function NewApplicationPage() {
   useEffect(() => {
     async function fetchSkills() {
       try {
-        const res = await fetch('http://localhost:5000/api/v1/skills');
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/skills`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -104,7 +104,7 @@ export default function NewApplicationPage() {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await fetch('http://localhost:5000/api/v1/applications', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/applications`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
