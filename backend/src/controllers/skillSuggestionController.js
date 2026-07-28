@@ -7,44 +7,77 @@ exports.getSuggestions = async (req, res) => {
     return res.status(400).json({ message: 'Please provide at least 20 characters of text for analysis.' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ message: 'AI Suggestion feature is not configured on the server.' });
-  }
+  const provider = process.env.AI_PROVIDER || (process.env.NVIDIA_API_KEY ? 'nvidia' : 'gemini');
+  let responseText = null;
 
   try {
-    // 1. Call Gemini via native fetch (requires Node 18+)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    
     const prompt = `
       Extract the top technical and professional skills from the following job description or resume text.
-      Return ONLY a JSON array of strings (e.g. ["React", "Python", "Project Management"]).
-      Do not include any markdown formatting like \`\`\`json, just the raw JSON array.
+      Return ONLY a valid JSON array of strings (e.g. ["React", "Python", "Project Management"]).
+      Do not include any markdown formatting, backticks, or explanation.
       
       Text to analyze:
       ${text}
     `;
 
-    const geminiRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }]
-      })
-    });
+    if (provider === 'nvidia') {
+      // --- NVIDIA NIM / AI Foundation Endpoints ---
+      const nvidiaKey = process.env.NVIDIA_API_KEY;
+      if (!nvidiaKey) {
+        return res.status(500).json({ message: 'NVIDIA_API_KEY is not configured on the server.' });
+      }
 
-    if (!geminiRes.ok) {
-      console.error('Gemini API Error:', await geminiRes.text());
-      return res.status(502).json({ message: 'Failed to communicate with AI provider.' });
+      const nvidiaModel = process.env.NVIDIA_MODEL || "meta/llama-3.1-70b-instruct";
+      const nvidiaRes = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${nvidiaKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          model: nvidiaModel,
+          messages: [
+            { role: "system", content: "You are an expert technical skill extractor. You output strictly valid JSON arrays of strings without markdown." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.1,
+          max_tokens: 512
+        })
+      });
+
+      if (!nvidiaRes.ok) {
+        console.error('NVIDIA API Error:', await nvidiaRes.text());
+        return res.status(502).json({ message: 'Failed to communicate with NVIDIA AI provider.' });
+      }
+
+      const nvidiaData = await nvidiaRes.json();
+      responseText = nvidiaData?.choices?.[0]?.message?.content;
+    } else {
+      // --- Google Gemini API (Default Fallback) ---
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: 'AI Suggestion feature is not configured on the server.' });
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const geminiRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      if (!geminiRes.ok) {
+        console.error('Gemini API Error:', await geminiRes.text());
+        return res.status(502).json({ message: 'Failed to communicate with AI provider.' });
+      }
+
+      const geminiData = await geminiRes.json();
+      responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
     }
 
-    const geminiData = await geminiRes.json();
-    let responseText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-    
     if (!responseText) {
       throw new Error('Invalid response structure from AI.');
     }
