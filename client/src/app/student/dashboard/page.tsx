@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { StatStrip } from '@/components/dashboard/stat-strip';
 import { KanbanBoard } from '@/components/dashboard/kanban-board';
+import { CalendarWidget } from '@/components/dashboard/calendar-widget';
 import { mockApplications } from '@/lib/mock-data';
 import { Application } from '@/lib/types';
 import { Plus } from 'lucide-react';
@@ -46,18 +47,31 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Stats Summary Strip */}
-        <StatStrip applications={applications} />
-
-        {/* Kanban Board Area */}
-        <div className="relative">
-          {/* Subtle background glow effect behind the board */}
-          <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent dark:from-blue-900/10 rounded-3xl -z-10 blur-xl" />
+        {/* Main Content Layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           
-          <KanbanBoard 
-            initialApplications={applications} 
-            onApplicationsChange={handleApplicationsChange} 
-          />
+          {/* Left Column: Stats & Kanban */}
+          <div className="xl:col-span-3 space-y-8">
+            {/* Stats Summary Strip */}
+            <StatStrip applications={applications} />
+
+            {/* Kanban Board Area */}
+            <div className="relative">
+              {/* Subtle background glow effect behind the board */}
+              <div className="absolute inset-0 bg-gradient-to-b from-blue-50/50 to-transparent dark:from-blue-900/10 rounded-3xl -z-10 blur-xl" />
+              
+              <KanbanBoard 
+                initialApplications={applications} 
+                onApplicationsChange={handleApplicationsChange} 
+              />
+            </div>
+          </div>
+
+          {/* Right Column: Widgets */}
+          <div className="xl:col-span-1">
+            <CalendarWidget />
+          </div>
+          
         </div>
         
       </div>
