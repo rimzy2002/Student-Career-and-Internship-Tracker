@@ -10,8 +10,27 @@ const studentRoutes = require('./routes/studentRoutes');
 const app = express();
 
 // Middleware
+const defaultFrontendOrigins = [
+  'http://localhost:3000',
+  'https://student-career-and-internship-track-mu.vercel.app'
+];
+
+const configuredFrontendOrigins = (process.env.FRONTEND_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedFrontendOrigins = new Set([
+  ...defaultFrontendOrigins,
+  ...configuredFrontendOrigins
+]);
+
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
+  origin(origin, callback) {
+    // Requests without an Origin header are from non-browser clients such as
+    // health checks. Browser requests must match an explicitly allowed origin.
+    callback(null, !origin || allowedFrontendOrigins.has(origin));
+  },
   credentials: true
 }));
 app.use(express.json());
