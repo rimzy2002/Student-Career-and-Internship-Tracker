@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { InteractiveRobotSpline } from '@/components/ui/interactive-3d-robot'
-import { Button } from '@/components/ui/button'
 
 export function Section() { 
   

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { mockApplications } from '@/lib/mock-data';
 import { Application, ApplicationStatus } from '@/lib/types';
 import { format } from 'date-fns';
@@ -9,21 +9,14 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-// Mock params until we get true Next.js router params
-export default function ApplicationDetailPage({ params }: { params: { id: string } }) {
-  const [application, setApplication] = useState<Application | null>(null);
-  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
-  const [notes, setNotes] = useState('');
+export default function ApplicationDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+  const unwrappedParams = React.use ? (params && typeof (params as Promise<{ id: string }>).then === 'function' ? React.use(params as Promise<{ id: string }>) : params as { id: string }) : (params as { id: string });
+  const appId = unwrappedParams?.id || '1';
+  const initialApp = mockApplications.find(a => a.id === appId) || mockApplications[0];
 
-  useEffect(() => {
-    // In a real app, this would be a fetch using params.id
-    // For now, we grab it from mock data
-    // Assuming '1' as fallback if params not provided properly in client mock
-    const appId = params?.id || '1'; 
-    const foundApp = mockApplications.find(a => a.id === appId) || mockApplications[0];
-    setApplication(foundApp);
-    setNotes(foundApp.notes || '');
-  }, [params]);
+  const [application, setApplication] = useState<Application>(initialApp);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const [notes, setNotes] = useState(initialApp.notes || '');
 
   if (!application) return (
     <div className="min-h-screen flex items-center justify-center p-8 bg-gray-50 dark:bg-gray-900">
@@ -181,7 +174,7 @@ export default function ApplicationDetailPage({ params }: { params: { id: string
               
               {application.history && application.history.length > 0 ? (
                 <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-3 space-y-6">
-                  {application.history.map((item, index) => (
+                  {application.history.map((item) => (
                     <div key={item.id} className="relative pl-6">
                       <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-white dark:bg-gray-800 border-2 border-blue-500" />
                       <div className="mb-1">

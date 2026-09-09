@@ -9,6 +9,15 @@ import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
 import { signOut } from 'firebase/auth'
 
+interface UserData {
+  id?: string;
+  email?: string;
+  role?: 'student' | 'admin';
+  first_name?: string;
+  last_name?: string;
+  profile_image_url?: string;
+}
+
 interface NavbarProps {
   isAuthPage?: boolean;
   defaultIsLoggedIn?: boolean;
@@ -18,7 +27,7 @@ interface NavbarProps {
 export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultUserRole = 'student' }: NavbarProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(defaultIsLoggedIn);
   const [userRole, setUserRole] = useState<'student' | 'admin'>(defaultUserRole);
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -28,10 +37,17 @@ export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultU
     const user = localStorage.getItem("user");
     const token = localStorage.getItem("token");
     if (user && token) {
-      const parsed = JSON.parse(user);
-      setIsLoggedIn(true);
-      setUserRole(parsed.role);
-      setUserData(parsed);
+      try {
+        const parsed = JSON.parse(user);
+        const timer = setTimeout(() => {
+          setIsLoggedIn(true);
+          setUserRole(parsed.role || 'student');
+          setUserData(parsed);
+        }, 0);
+        return () => clearTimeout(timer);
+      } catch (e) {
+        console.error("Failed to parse stored user", e);
+      }
     }
   }, []);
 
@@ -56,6 +72,7 @@ export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultU
   const studentLinks = [
     { name: 'Dashboard', url: '/student/dashboard' },
     { name: 'Applications', url: '/student/applications' },
+    { name: 'Resume Match', url: '/student/resume-match' },
     { name: 'Skills', url: '/student/skills' },
     { name: 'Profile', url: '/student/profile' },
   ];

@@ -1,16 +1,49 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatStrip } from '@/components/dashboard/stat-strip';
 import { KanbanBoard } from '@/components/dashboard/kanban-board';
 import { CalendarWidget } from '@/components/dashboard/calendar-widget';
 import { mockApplications } from '@/lib/mock-data';
 import { Application } from '@/lib/types';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function DashboardPage() {
   const [applications, setApplications] = useState<Application[]>(mockApplications);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchApplications = async () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/applications`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setApplications(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch live applications, using offline defaults:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchApplications();
+  }, []);
 
   const handleApplicationsChange = (newApps: Application[]) => {
     setApplications(newApps);
@@ -32,19 +65,33 @@ export default function DashboardPage() {
             </p>
           </div>
           
-          <Link 
-            href="/student/applications/new"
-            className="inline-flex items-center justify-center px-5 py-2.5 
-                       bg-gradient-to-r from-blue-600 to-purple-600 
-                       hover:from-blue-700 hover:to-purple-700
-                       text-white rounded-xl font-medium text-sm transition-all duration-200 
-                       shadow-[0_1px_3px_rgba(0,0,0,0.1),0_10px_20px_rgba(59,130,246,0.15)]
-                       hover:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_10px_20px_rgba(59,130,246,0.25)]
-                       active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Application
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link 
+              href="/student/resume-match"
+              className="inline-flex items-center justify-center px-4 py-2.5 
+                         bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200
+                         border border-gray-200 dark:border-gray-700
+                         hover:bg-gray-50 dark:hover:bg-gray-700/60
+                         rounded-xl font-medium text-sm transition-all duration-200 shadow-sm"
+            >
+              <Sparkles className="w-4 h-4 mr-2 text-indigo-500" />
+              AI Resume Match
+            </Link>
+
+            <Link 
+              href="/student/applications/new"
+              className="inline-flex items-center justify-center px-5 py-2.5 
+                         bg-gradient-to-r from-blue-600 to-purple-600 
+                         hover:from-blue-700 hover:to-purple-700
+                         text-white rounded-xl font-medium text-sm transition-all duration-200 
+                         shadow-[0_1px_3px_rgba(0,0,0,0.1),0_10px_20px_rgba(59,130,246,0.15)]
+                         hover:shadow-[0_1px_3px_rgba(0,0,0,0.1),0_10px_20px_rgba(59,130,246,0.25)]
+                         active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Application
+            </Link>
+          </div>
         </div>
 
         {/* Main Content Layout */}

@@ -63,23 +63,75 @@ exports.createApplication = async (req, res) => {
   }
 };
 
+const STATUS_NAME_TO_ID = {
+  'Applied': 1,
+  'Interview': 2,
+  'Offer': 3,
+  'Rejected': 4
+};
+
+const STATUS_ID_TO_NAME = {
+  1: 'Applied',
+  2: 'Interview',
+  3: 'Offer',
+  4: 'Rejected'
+};
+
 exports.getApplications = async (req, res) => {
   const studentId = req.user.userId;
 
   try {
+    // Single unified query with nested relations: prevents N+1 queries
     const { data: applications, error } = await supabase
       .from('applications')
-      .select('*, application_statuses(name)')
+      .select(`
+        id,
+        company_name,
+        role_title,
+        current_status_id,
+        date_applied,
+        notes,
+        created_at,
+        updated_at,
+        application_statuses (
+          id,
+          name
+        ),
+        application_skills (
+          skill_id,
+          skills (
+            id,
+            name
+          )
+        )
+      `)
       .eq('student_id', studentId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
-    const formattedApps = (applications || []).map(app => ({
-      ...app,
-      current_status_name: app.application_statuses ? app.application_statuses.name : 'Applied'
-    }));
+    const formattedApps = (applications || []).map(app => {
+      const statusName = app.application_statuses?.name || STATUS_ID_TO_NAME[app.current_status_id] || 'Applied';
+      const extractedSkills = (app.application_skills || [])
+        .map(as => as.skills)
+        .filter(Boolean)
+        .map(s => ({ id: String(s.id), name: s.name }));
+
+      return {
+        id: String(app.id),
+        companyName: app.company_name,
+        roleTitle: app.role_title,
+        dateApplied: app.date_applied,
+        status: statusName,
+        current_status_id: app.current_status_id,
+        current_status_name: statusName,
+        notes: app.notes,
+        skills: extractedSkills,
+        createdAt: app.created_at,
+        updatedAt: app.updated_at
+      };
+    });
 
     res.status(200).json(formattedApps);
   } catch (error) {
@@ -91,17 +143,27 @@ exports.getApplications = async (req, res) => {
 exports.updateApplicationStatus = async (req, res) => {
   const studentId = req.user.userId;
   const applicationId = req.params.id;
-  const { status_id, notes } = req.body;
+  let { status_id, status, notes } = req.body;
 
-  if (!status_id) {
-    return res.status(400).json({ message: 'Missing status_id' });
+  // Support both status_id (integer/string) and status name ('Interview', etc.)
+  let resolvedStatusId = status_id;
+  if (!resolvedStatusId && status) {
+    resolvedStatusId = STATUS_NAME_TO_ID[status];
+  } else if (typeof resolvedStatusId === 'string' && isNaN(Number(resolvedStatusId))) {
+    resolvedStatusId = STATUS_NAME_TO_ID[resolvedStatusId];
   }
 
+  if (!resolvedStatusId) {
+    return res.status(400).json({ message: 'Missing or invalid status_id or status name' });
+  }
+
+  resolvedStatusId = Number(resolvedStatusId);
+
   try {
-    // 1. Verify ownership
+    // 1. Verify ownership and existence
     const { data: apps, error: checkError } = await supabase
       .from('applications')
-      .select('id')
+      .select('id, company_name, role_title')
       .eq('id', applicationId)
       .eq('student_id', studentId)
       .is('deleted_at', null);
@@ -112,29 +174,54 @@ exports.updateApplicationStatus = async (req, res) => {
       return res.status(404).json({ message: 'Application not found' });
     }
 
+    const currentTimestamp = new Date().toISOString();
+
     // 2. Update current_status_id on application
     const { error: updateError } = await supabase
       .from('applications')
-      .update({ current_status_id: status_id, updated_at: new Date().toISOString() })
+      .update({ current_status_id: resolvedStatusId, updated_at: currentTimestamp })
       .eq('id', applicationId);
 
     if (updateError) throw updateError;
 
     // 3. Insert into application_status_history
+    const statusName = STATUS_ID_TO_NAME[resolvedStatusId] || 'Unknown';
     const { error: histError } = await supabase
       .from('application_status_history')
       .insert([
         {
           application_id: applicationId,
-          status_id: status_id,
-          notes: notes || null,
-          changed_at: new Date().toISOString()
+          status_id: resolvedStatusId,
+          notes: notes || `Moved to ${statusName}`,
+          changed_at: currentTimestamp
         }
       ]);
 
     if (histError) throw histError;
 
-    res.status(200).json({ message: 'Application status updated successfully' });
+    // 4. Broadcast confirmed change via Supabase Realtime Broadcast
+    try {
+      const channel = supabase.channel(`student:${studentId}:applications`);
+      channel.send({
+        type: 'broadcast',
+        event: 'application:status_updated',
+        payload: {
+          applicationId: String(applicationId),
+          status_id: resolvedStatusId,
+          status: statusName,
+          updated_at: currentTimestamp
+        }
+      });
+    } catch (realtimeErr) {
+      console.warn('Realtime broadcast notice (non-fatal):', realtimeErr.message);
+    }
+
+    res.status(200).json({
+      message: 'Application status updated successfully',
+      applicationId: String(applicationId),
+      status: statusName,
+      status_id: resolvedStatusId
+    });
 
   } catch (error) {
     console.error('updateApplicationStatus error:', error);

@@ -45,8 +45,8 @@ export default function LoginPage() {
       } else {
         router.push("/student/dashboard");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
@@ -85,9 +85,9 @@ export default function LoginPage() {
       } else {
         router.push("/student/dashboard");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "An error occurred with Google Sign-In");
+      setError(err instanceof Error ? err.message : "An error occurred with Google Sign-In");
     }
   };
 
@@ -140,7 +140,7 @@ export default function LoginPage() {
         {/* Absolute Theme Toggle & Sign up link */}
         <div className="absolute top-6 right-8 flex items-center gap-6">
           <span className="text-sm text-muted-foreground hidden sm:inline-block">
-            Don't have an account? <Link href="/register" className="text-blue-600 hover:underline font-medium">Sign up</Link>
+            Don&apos;t have an account? <Link href="/register" className="text-blue-600 hover:underline font-medium">Sign up</Link>
           </span>
           <div className="relative w-8 h-8">
             <ThemeToggle />

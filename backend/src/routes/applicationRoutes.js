@@ -12,7 +12,9 @@ router.get('/', applicationController.getApplications);
 router.post('/', applicationController.createApplication);
 router.get('/:id/history', applicationController.getApplicationHistory);
 router.patch('/:id/status', applicationController.updateApplicationStatus);
+router.put('/:id/status', applicationController.updateApplicationStatus);
 router.patch('/:id/skills', applicationController.updateApplicationSkills);
+router.put('/:id/skills', applicationController.updateApplicationSkills);
 router.delete('/:id', applicationController.archiveApplication);
 
 module.exports = router;

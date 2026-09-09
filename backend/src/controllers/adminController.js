@@ -50,35 +50,35 @@ exports.getApplicationsAnalytics = async (req, res) => {
     // 1. Get all application statuses
     const { data: statuses, error: statError } = await supabase
       .from('application_statuses')
-      .select('id, name');
+      .select('id, name')
+      .order('id', { ascending: true });
 
     if (statError) throw statError;
 
-    // 2. Get all non-deleted applications with their current_status_id
-    const { data: applications, error: appError } = await supabase
-      .from('applications')
-      .select('current_status_id')
-      .is('deleted_at', null);
+    // 2. Perform indexed DB-level COUNT aggregations without transferring rows into Node memory
+    const countPromises = (statuses || []).map(async (status) => {
+      const { count, error } = await supabase
+        .from('applications')
+        .select('id', { count: 'exact', head: true })
+        .eq('current_status_id', status.id)
+        .is('deleted_at', null);
 
-    if (appError) throw appError;
-
-    // Count occurrences
-    const counts = {};
-    (statuses || []).forEach(s => {
-      counts[s.id] = { status_name: s.name, count: 0 };
-    });
-
-    (applications || []).forEach(app => {
-      if (counts[app.current_status_id]) {
-        counts[app.current_status_id].count += 1;
+      if (error) {
+        console.error(`Error counting status ${status.name}:`, error);
+        return { status_name: status.name, count: 0 };
       }
+
+      return {
+        status_name: status.name,
+        count: count || 0
+      };
     });
 
-    const applicationsAnalytics = Object.values(counts);
-
+    const applicationsAnalytics = await Promise.all(countPromises);
     res.status(200).json(applicationsAnalytics);
   } catch (error) {
     console.error('getApplicationsAnalytics error:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
+

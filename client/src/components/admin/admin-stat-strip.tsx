@@ -1,10 +1,18 @@
 import React, { useRef, useEffect } from 'react';
 import { ApplicationAnalytics, SkillAnalytics } from '@/lib/types';
-import { Layers, Users, AlertTriangle } from 'lucide-react';
+import { Layers, Users, AlertTriangle, LucideIcon } from 'lucide-react';
 
 interface AdminStatStripProps {
   applicationAnalytics: ApplicationAnalytics[];
   skillAnalytics: SkillAnalytics[];
+}
+
+interface StatItem {
+  label: string;
+  value: string | number;
+  icon: LucideIcon;
+  color: string;
+  bg: string;
 }
 
 export function AdminStatStrip({ applicationAnalytics, skillAnalytics }: AdminStatStripProps) {
@@ -15,7 +23,7 @@ export function AdminStatStrip({ applicationAnalytics, skillAnalytics }: AdminSt
   
   const topSkillGap = skillAnalytics.length > 0 ? skillAnalytics[0].skill_name : 'N/A';
 
-  const stats = [
+  const stats: StatItem[] = [
     { label: 'Total Applications', value: totalApplications, icon: Layers, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { label: 'Total Students', value: totalStudents, icon: Users, color: 'text-purple-500', bg: 'bg-purple-500/10' },
     { label: 'Top Skill Gap', value: topSkillGap, icon: AlertTriangle, color: 'text-rose-500', bg: 'bg-rose-500/10' },
@@ -33,7 +41,7 @@ export function AdminStatStrip({ applicationAnalytics, skillAnalytics }: AdminSt
   );
 }
 
-function StatCard({ stat, Icon }: { stat: any, Icon: any }) {
+function StatCard({ stat, Icon }: { stat: StatItem; Icon: LucideIcon }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

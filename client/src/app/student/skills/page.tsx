@@ -1,399 +1,705 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Plus, Sparkles, Trash2, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { 
+  ArrowLeft, 
+  Search, 
+  Plus, 
+  Sparkles, 
+  Trash2, 
+  CheckCircle2, 
+  AlertCircle, 
+  TrendingUp, 
+  Briefcase, 
+  Layers, 
+  Award,
+  Zap,
+  Check,
+  X,
+  Loader2
+} from 'lucide-react';
+import { API_BASE_URL } from '@/lib/api';
 
-interface MySkill {
+export type ProficiencyLevel = 'beginner' | 'intermediate' | 'advanced';
+
+export interface MySkillItem {
   id: string;
+  skillId?: string;
   name: string;
+  category: string;
+  proficiency: ProficiencyLevel;
+  source: 'manual' | 'ai' | 'application' | 'resume';
   application_count: number;
+  interview_count: number;
+  offer_count: number;
   rejection_count: number;
+  interview_rate: number;
+  offer_rate: number;
 }
 
-interface MasterSkill {
+export interface MasterSkillItem {
   id: string;
   name: string;
+  category: string;
+  normalized_name?: string;
 }
 
-export default function SkillsTrackerPage() {
-  const router = useRouter();
+export interface AiSuggestionItem {
+  skillId: string;
+  id?: string;
+  name: string;
+  category: string;
+  confidence: number;
+  matched: boolean;
+}
 
+const CATEGORIES = [
+  'All',
+  'Programming',
+  'Engineering Software',
+  'Industrial Automation',
+  'Web & Frameworks',
+  'Databases',
+  'Cloud & DevOps',
+  'Data & Analytics'
+];
+
+export default function SkillsManagementPage() {
   // --- States ---
-  // My Skills
-  const [mySkills, setMySkills] = useState<MySkill[]>([]);
+  const [mySkills, setMySkills] = useState<MySkillItem[]>([]);
   const [isLoadingMySkills, setIsLoadingMySkills] = useState(true);
-  
-  // Master Skills for Manual Add
-  const [masterSkills, setMasterSkills] = useState<MasterSkill[]>([]);
-  const [selectedSkillId, setSelectedSkillId] = useState('');
-  const [isAddingManual, setIsAddingManual] = useState(false);
 
-  // AI Tool
+  // Master Skills & Search Combobox
+  const [masterSkills, setMasterSkills] = useState<MasterSkillItem[]>([]);
+  const [isLoadingMaster, setIsLoadingMaster] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedSkill, setSelectedSkill] = useState<MasterSkillItem | null>(null);
+  const [addProficiency, setAddProficiency] = useState<ProficiencyLevel>('intermediate');
+  const [isAdding, setIsAdding] = useState(false);
+
+  // AI Discovery Tool
   const [aiText, setAiText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [matchedSkills, setMatchedSkills] = useState<MasterSkill[]>([]);
-  const [newSkills, setNewSkills] = useState<string[]>([]);
-  const [hasAiResult, setHasAiResult] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestionItem[]>([]);
+  const [selectedAiSkillIds, setSelectedAiSkillIds] = useState<Set<string>>(new Set());
+  const [isBatchAdding, setIsBatchAdding] = useState(false);
 
-  // Initial Fetch
-  useEffect(() => {
-    fetchMySkills();
-    fetchMasterSkills();
-  }, []);
+  // Notifications & Feedback
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const getHeaders = () => {
-    const token = localStorage.getItem('token');
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const getHeaders = React.useCallback(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     return {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     };
-  };
+  }, []);
 
-  const fetchMySkills = async () => {
+  // Fetch Logged-in Student Skills
+  const fetchMySkills = React.useCallback(async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/students/skills`, {
         headers: getHeaders()
       });
       if (res.ok) {
         const data = await res.json();
-        setMySkills(data.skills || []);
+        setMySkills(data.skills || (Array.isArray(data) ? data : []));
       }
     } catch (err) {
-      console.error('Failed to fetch my skills', err);
+      console.warn('Could not load student skills from server:', err);
     } finally {
       setIsLoadingMySkills(false);
     }
-  };
+  }, [getHeaders]);
 
-  const fetchMasterSkills = async () => {
+  // Fetch Master Catalog Skills
+  const fetchMasterSkills = React.useCallback(async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/skills`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/skills`);
       if (res.ok) {
         const data = await res.json();
-        setMasterSkills(data || []);
+        setMasterSkills(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error('Failed to fetch master skills', err);
+      console.warn('Could not load master catalog from server:', err);
+    } finally {
+      setIsLoadingMaster(false);
     }
-  };
+  }, []);
 
-  // --- Actions ---
+  useEffect(() => {
+    void fetchMySkills();
+    void fetchMasterSkills();
+  }, [fetchMySkills, fetchMasterSkills]);
 
-  const handleManualAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedSkillId) return;
+  // Set of already added skill IDs for easy filtering
+  const existingSkillIds = useMemo(() => {
+    return new Set(mySkills.map(s => String(s.skillId || s.id)));
+  }, [mySkills]);
 
-    setIsAddingManual(true);
+  // Filtered master skills based on search query & category pill
+  const filteredMasterSkills = useMemo(() => {
+    return masterSkills.filter(skill => {
+      const matchesCategory = selectedCategory === 'All' || skill.category.toLowerCase() === selectedCategory.toLowerCase();
+      const matchesSearch = !searchQuery || skill.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const notYetAdded = !existingSkillIds.has(String(skill.id));
+      return matchesCategory && matchesSearch && notYetAdded;
+    });
+  }, [masterSkills, selectedCategory, searchQuery, existingSkillIds]);
+
+  // --- Manual Add Skill Action ---
+  const handleAddSkill = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedSkill) return;
+
+    const skillId = selectedSkill.id;
+    setIsAdding(true);
+
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/students/skills`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ skill_id: selectedSkillId })
+        body: JSON.stringify({
+          skillId: skillId,
+          proficiency: addProficiency,
+          source: 'manual'
+        })
       });
-      if (res.ok) {
-        await fetchMySkills();
-        setSelectedSkillId('');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to add skill');
       }
-    } catch (err) {
-      console.error('Failed to add skill manually', err);
+
+      showToast('success', `Added ${selectedSkill.name} (${addProficiency}) to your skills!`);
+      setSelectedSkill(null);
+      setSearchQuery('');
+      await fetchMySkills();
+    } catch (err: unknown) {
+      showToast('error', err instanceof Error ? err.message : 'Could not add skill');
     } finally {
-      setIsAddingManual(false);
+      setIsAdding(false);
     }
   };
 
-  const handleRemoveSkill = async (skillId: string) => {
-    // Optimistic UI update
-    const previousSkills = [...mySkills];
-    setMySkills(prev => prev.filter(s => s.id !== skillId));
+  // --- Remove Skill Action ---
+  const handleRemoveSkill = async (skillId: string, skillName: string) => {
+    const priorSkills = [...mySkills];
+    // Optimistic delete
+    setMySkills(prev => prev.filter(s => String(s.skillId || s.id) !== String(skillId)));
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills/${skillId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/students/skills/${skillId}`, {
         method: 'DELETE',
         headers: getHeaders()
       });
+
       if (!res.ok) {
-        throw new Error('Failed to delete');
+        throw new Error('Failed to delete skill from server');
       }
-    } catch (err) {
-      console.error('Failed to remove skill', err);
-      // Revert optimistic update
-      setMySkills(previousSkills);
-      alert('Could not remove skill. Please try again.');
+
+      showToast('success', `Removed ${skillName}`);
+    } catch (err: unknown) {
+      // Revert rollback
+      setMySkills(priorSkills);
+      showToast('error', err instanceof Error ? err.message : 'Could not remove skill');
     }
   };
 
-  const handleAnalyze = async () => {
-    if (aiText.length < 20) return;
+  // --- AI Discovery Analyze Action ---
+  const handleAnalyzeAi = async () => {
+    if (aiText.length < 20) {
+      showToast('error', 'Please paste at least 20 characters to analyze.');
+      return;
+    }
 
     setIsAnalyzing(true);
-    setAiError('');
-    setHasAiResult(false);
-    setMatchedSkills([]);
-    setNewSkills([]);
+    setAiSuggestions([]);
+    setSelectedAiSkillIds(new Set());
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skill-suggestions`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/students/skills/suggest`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ text: aiText })
       });
 
       if (!res.ok) {
-        throw new Error('Skill suggestions are temporarily unavailable — you can still add skills manually above.');
+        throw new Error('AI suggestion service unavailable');
       }
 
       const data = await res.json();
+      const list: AiSuggestionItem[] = data.suggestions || [];
       
-      // Filter out any matched_skills that the student already has
-      const existingSkillIds = new Set(mySkills.map(s => s.id));
-      const filteredMatched = (data.matched_skills || []).filter(
-        (s: MasterSkill) => !existingSkillIds.has(s.id)
-      );
+      // Filter out skills the student already owns
+      const unowned = list.filter(item => !existingSkillIds.has(String(item.skillId || item.id)));
+      
+      setAiSuggestions(unowned);
 
-      setMatchedSkills(filteredMatched);
-      setNewSkills(data.new_skills || []);
-      setHasAiResult(true);
+      // Pre-select high-confidence matches by default (>= 0.85)
+      const initialChecked = new Set<string>();
+      unowned.forEach(s => {
+        if (s.confidence >= 0.85) {
+          initialChecked.add(String(s.skillId || s.id));
+        }
+      });
+      setSelectedAiSkillIds(initialChecked);
 
-    } catch (err: any) {
-      setAiError(err.message || 'Something went wrong');
+      if (unowned.length === 0) {
+        showToast('success', 'Analysis complete! You already possess all detected skills.');
+      } else {
+        showToast('success', `Found ${unowned.length} skills. Review and approve below.`);
+      }
+    } catch (err: unknown) {
+      showToast('error', err instanceof Error ? err.message : 'Failed to analyze text');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleAddSuggestedSkill = async (skill: MasterSkill) => {
-    // Remove from suggestions list optimistically
-    setMatchedSkills(prev => prev.filter(s => s.id !== skill.id));
-    
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/students/me/skills`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ skill_id: skill.id })
-      });
-      if (res.ok) {
-        await fetchMySkills();
+  // Toggle single AI skill checkbox
+  const toggleAiSkill = (id: string) => {
+    setSelectedAiSkillIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
       }
-    } catch (err) {
-      console.error('Failed to add suggested skill', err);
-      // Revert if failed
-      setMatchedSkills(prev => [...prev, skill]);
+      return next;
+    });
+  };
+
+  // Batch Add Approved AI Skills
+  const handleBatchAddAiSkills = async () => {
+    if (selectedAiSkillIds.size === 0) return;
+
+    setIsBatchAdding(true);
+    const toAdd = aiSuggestions.filter(s => selectedAiSkillIds.has(String(s.skillId || s.id)));
+
+    let successCount = 0;
+    for (const skill of toAdd) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/students/skills`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({
+            skillId: skill.skillId || skill.id,
+            proficiency: 'intermediate',
+            source: 'ai'
+          })
+        });
+        if (res.ok) successCount += 1;
+      } catch {
+        // continue batch
+      }
+    }
+
+    await fetchMySkills();
+    // Remove added from suggestions
+    setAiSuggestions(prev => prev.filter(s => !selectedAiSkillIds.has(String(s.skillId || s.id))));
+    setSelectedAiSkillIds(new Set());
+    setIsBatchAdding(false);
+    showToast('success', `Successfully added ${successCount} verified skills!`);
+  };
+
+  const getProficiencyBadge = (level: ProficiencyLevel) => {
+    switch (level) {
+      case 'beginner':
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+      case 'advanced':
+        return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+      default:
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
     }
   };
 
-  const resetAiTool = () => {
-    setAiText('');
-    setAiError('');
-    setHasAiResult(false);
-    setMatchedSkills([]);
-    setNewSkills([]);
-  };
-
   return (
-    <div className="flex min-h-screen justify-center bg-background text-foreground p-4 sm:p-8 relative">
-      
-      <div className="absolute top-6 right-8 flex items-center gap-6">
-        <div className="relative w-8 h-8">
-          <ThemeToggle />
-        </div>
-      </div>
+    <div className="min-h-screen p-6 md:p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 transition-colors">
+      <div className="max-w-[1400px] mx-auto space-y-10">
 
-      <div className="w-full max-w-4xl space-y-8 mt-12">
-        
-        {/* Header */}
-        <div className="space-y-2">
-          <Link 
-            href="/student/dashboard"
-            className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-3xl font-bold tracking-tight">My Skills</h1>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            Skills you've tagged across applications and feedback.
-          </p>
-        </div>
+        {/* Floating Toast Feedback */}
+        {toast && (
+          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium shadow-xl animate-in fade-in slide-in-from-top-3 ${
+            toast.type === 'error' ? 'bg-rose-500 text-white' : 'bg-emerald-600 text-white'
+          }`}>
+            {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            <span>{toast.text}</span>
+          </div>
+        )}
 
-        {/* Manual Add Form */}
-        <div className="bg-card p-6 rounded-2xl shadow-sm border border-border flex flex-col sm:flex-row items-end gap-4">
-          <div className="flex-1 space-y-2 w-full">
-            <Label htmlFor="skillSelect" className="text-sm font-semibold">Add a Skill</Label>
-            <select
-              id="skillSelect"
-              value={selectedSkillId}
-              onChange={(e) => setSelectedSkillId(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <Link 
+              href="/student/dashboard" 
+              className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 mb-2 transition-colors"
             >
-              <option value="" disabled>Select a skill from the master list...</option>
-              {masterSkills
-                // Only show skills the student doesn't already have
-                .filter(s => !mySkills.find(my => my.id === s.id))
-                .map(skill => (
-                  <option key={skill.id} value={skill.id}>{skill.name}</option>
-              ))}
-            </select>
+              <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back to Dashboard
+            </Link>
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
+              My Skills Portfolio
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Manage your verified competencies and track their real-world impact across your internship applications.
+            </p>
           </div>
-          <Button 
-            onClick={handleManualAdd} 
-            disabled={!selectedSkillId || isAddingManual}
-            className="h-10 px-6 font-medium bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+
+          <Link 
+            href="/student/resume-match"
+            className="inline-flex items-center px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors shadow-sm"
           >
-            {isAddingManual ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
-          </Button>
+            <Sparkles className="w-4 h-4 mr-2" /> Resume ↔ Job Match
+          </Link>
         </div>
 
-        {/* My Skills Grid */}
-        <div className="space-y-4">
-          {isLoadingMySkills ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-28 rounded-xl bg-accent animate-pulse" />
-              ))}
-            </div>
-          ) : mySkills.length === 0 ? (
-            <div className="text-center py-12 px-4 border border-dashed border-border rounded-xl">
-              <p className="text-muted-foreground">You haven't added any skills yet — add one above or try the AI suggestion tool.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {mySkills.map(skill => (
-                <div key={skill.id} className="group relative bg-card p-5 rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow">
-                  <button 
-                    onClick={() => handleRemoveSkill(skill.id)}
-                    className="absolute top-3 right-3 text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Remove skill"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                  
-                  <h3 className="font-semibold text-lg mb-3">{skill.name}</h3>
-                  
-                  <div className="space-y-1.5 text-sm">
-                    <p className="text-muted-foreground">
-                      Used in <span className="font-medium text-foreground">{skill.application_count}</span> application{skill.application_count !== 1 && 's'}
-                    </p>
-                    
-                    {skill.rejection_count > 0 && (
-                      <p className="flex items-center text-amber-600 dark:text-amber-500 font-medium bg-amber-50 dark:bg-amber-950/30 px-2 py-1 rounded-md -ml-2 w-max">
-                        <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />
-                        Flagged in {skill.rejection_count} rejection{skill.rejection_count !== 1 && 's'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* AI Skill Suggestion Tool */}
-        <div className="mt-12 bg-card p-6 sm:p-8 rounded-2xl border-2 border-blue-100 dark:border-blue-900/40 relative overflow-hidden">
-          
-          <div className="absolute top-0 right-0 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold px-3 py-1 rounded-bl-lg flex items-center">
-            <Sparkles className="w-3 h-3 mr-1" />
-            AI Assist
-          </div>
-
-          <h2 className="text-xl font-semibold mb-2">Discover Skills</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Paste a job description or your resume text to get intelligent skill suggestions.
-          </p>
-
-          {!hasAiResult && (
-            <div className="space-y-4">
-              <textarea
-                value={aiText}
-                onChange={e => setAiText(e.target.value)}
-                placeholder="Paste text here..."
-                className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
-              />
-              
-              {aiError && (
-                <div className="p-3 text-sm text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-900/50">
-                  {aiError}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  {aiText.length < 20 ? `Need at least ${20 - aiText.length} more characters` : 'Ready to analyze'}
+        {/* =======================================================
+            SECTION 1: MY SKILLS & CAREER ANALYTICS
+        ======================================================== */}
+        <div className="bg-white dark:bg-gray-800/90 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-6">
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700/50 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  My Skills
+                </h2>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {mySkills.length} {mySkills.length === 1 ? 'skill' : 'skills'} registered
                 </span>
-                <Button 
-                  onClick={handleAnalyze} 
-                  disabled={aiText.length < 20 || isAnalyzing}
-                  className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900"
-                >
-                  {isAnalyzing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Analyzing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Analyze
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
-          )}
+          </div>
 
-          {hasAiResult && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              
-              {/* Matched Skills */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Skills you might want to add</h3>
-                {matchedSkills.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No matching skills found in our system that you don't already have.</p>
+          {isLoadingMySkills ? (
+            <div className="flex items-center justify-center py-12 text-gray-400">
+              <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading skills portfolio...
+            </div>
+          ) : mySkills.length === 0 ? (
+            <div className="text-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700/60 rounded-xl space-y-3">
+              <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-500">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">No skills added yet</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                Search our master catalog below or paste a job posting in AI Skill Discovery to populate your competencies.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {mySkills.map((skill) => (
+                <div 
+                  key={skill.id}
+                  className="group relative p-4 rounded-xl border border-gray-100 dark:border-gray-700/60 bg-gray-50/50 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-gray-800 hover:shadow-md transition-all space-y-3"
+                >
+                  {/* Top: Name, Category, Remove Button */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {skill.name}
+                      </h3>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
+                        {skill.category}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleRemoveSkill(String(skill.skillId || skill.id), skill.name)}
+                      className="text-gray-400 hover:text-rose-500 p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                      title="Remove skill"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Badges: Proficiency & Source */}
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize border ${getProficiencyBadge(skill.proficiency)}`}>
+                      {skill.proficiency}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-200/60 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300">
+                      {skill.source === 'ai' ? 'AI Extracted' : 'Manual'}
+                    </span>
+                  </div>
+
+                  {/* Career Conversion Analytics Strip */}
+                  <div className="pt-2 border-t border-gray-100 dark:border-gray-700/40 text-xs text-gray-600 dark:text-gray-300 grid grid-cols-3 gap-2 text-center">
+                    <div className="p-1.5 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/40">
+                      <span className="block text-[10px] text-gray-400 uppercase font-bold">Applications</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{skill.application_count}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/40">
+                      <span className="block text-[10px] text-gray-400 uppercase font-bold">Interviews</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">{skill.interview_count}</span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/40">
+                      <span className="block text-[10px] text-gray-400 uppercase font-bold">Offers</span>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">{skill.offer_count}</span>
+                    </div>
+                  </div>
+
+                  {/* Conversion Ratio Pill */}
+                  {skill.application_count > 0 && (
+                    <div className="flex justify-between items-center text-[11px] text-gray-500 dark:text-gray-400 font-medium px-1">
+                      <span>Interview conversion:</span>
+                      <span className="font-semibold text-gray-700 dark:text-gray-200">{skill.interview_rate}%</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* =======================================================
+            SECTION 2: ADD SKILLS (SEARCHABLE COMBOBOX)
+        ======================================================== */}
+        <div className="bg-white dark:bg-gray-800/90 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-700/50 pb-4">
+            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Plus className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Add Skills
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Search across verified industry categories with standardized proficiency tiers.
+              </p>
+            </div>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map(category => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setSelectedCategory(category)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  selectedCategory === category
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input & Dropdown Suggestions */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Search Combobox Area */}
+            <div className="lg:col-span-2 space-y-3 relative">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Search Master Catalog
+              </label>
+
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Type to search e.g. Python, MATLAB, PLC, React, SQL..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-gray-100"
+                />
+              </div>
+
+              {/* Autocomplete Results Box */}
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-900/40 p-2 divide-y divide-gray-100 dark:divide-gray-800 scrollbar-thin">
+                {isLoadingMaster ? (
+                  <div className="py-4 text-center text-xs text-gray-400">Loading catalog...</div>
+                ) : filteredMasterSkills.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-gray-400">No matching skills found in catalog.</div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {matchedSkills.map(skill => (
-                      <button
-                        key={skill.id}
-                        onClick={() => handleAddSuggestedSkill(skill)}
-                        className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 dark:border-blue-800 transition-colors"
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        Add {skill.name}
-                      </button>
-                    ))}
+                  filteredMasterSkills.slice(0, 15).map(skill => (
+                    <button
+                      key={skill.id}
+                      type="button"
+                      onClick={() => setSelectedSkill(skill)}
+                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-xs transition-colors ${
+                        selectedSkill?.id === skill.id
+                          ? 'bg-blue-600 text-white font-bold'
+                          : 'hover:bg-white dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200'
+                      }`}
+                    >
+                      <span className="font-semibold">{skill.name}</span>
+                      <span className={`text-[11px] ${selectedSkill?.id === skill.id ? 'text-blue-100' : 'text-gray-400'}`}>
+                        {skill.category}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Proficiency Selection & Add Action */}
+            <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-5 border border-gray-100 dark:border-gray-700/50 space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Select Proficiency
+                </label>
+
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-200/60 dark:bg-gray-800/80 rounded-xl">
+                  {(['beginner', 'intermediate', 'advanced'] as ProficiencyLevel[]).map(lvl => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setAddProficiency(lvl)}
+                      className={`py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+                        addProficiency === lvl
+                          ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'
+                      }`}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedSkill && (
+                  <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">Ready to add:</span>
+                    <span className="font-bold text-blue-700 dark:text-blue-300 ml-1.5">{selectedSkill.name}</span>
+                    <span className="text-gray-400 ml-1">({addProficiency})</span>
                   </div>
                 )}
               </div>
 
-              {/* New Skills (Not in DB) */}
-              {newSkills.length > 0 && (
-                <div className="space-y-3 pt-4 border-t border-border">
-                  <h3 className="text-sm font-semibold text-foreground">New skills identified</h3>
-                  <p className="text-xs text-muted-foreground -mt-2">These aren't in our system yet — noted for your reference.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {newSkills.map((skillName, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-accent text-accent-foreground border border-border"
-                      >
-                        {skillName}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => handleAddSkill()}
+                disabled={!selectedSkill || isAdding}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm"
+              >
+                {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Add to My Skills
+              </button>
+            </div>
 
-              <div className="pt-4 flex justify-end">
-                <Button variant="outline" size="sm" onClick={resetAiTool}>
-                  Analyze another text
-                </Button>
+          </div>
+        </div>
+
+        {/* =======================================================
+            SECTION 3: AI SKILL DISCOVERY
+        ======================================================== */}
+        <div className="bg-white dark:bg-gray-800/90 rounded-2xl p-6 md:p-8 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-700/50 pb-4">
+            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                AI Skill Discovery
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Paste a job description, resume, or LinkedIn post. AI maps skills to the verified catalog with required approval.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <textarea
+              rows={5}
+              value={aiText}
+              onChange={(e) => setAiText(e.target.value)}
+              placeholder="Paste job description, resume bullet points, or role requirements here (min 20 characters)..."
+              className="w-full p-4 rounded-xl text-sm bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none resize-none transition-all placeholder:text-gray-400 text-gray-900 dark:text-gray-100"
+            />
+
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-400">{aiText.length} characters</span>
+
+              <button
+                type="button"
+                onClick={handleAnalyzeAi}
+                disabled={isAnalyzing || aiText.length < 20}
+                className="inline-flex items-center px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-40 transition-all shadow-sm"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" /> Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" /> Discover Skills
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* AI Extracted Suggestions List */}
+          {aiSuggestions.length > 0 && (
+            <div className="pt-6 border-t border-gray-100 dark:border-gray-700/50 space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                    AI Suggestions ({aiSuggestions.length} found)
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Select the skills you want to add to your profile.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleBatchAddAiSkills}
+                  disabled={selectedAiSkillIds.size === 0 || isBatchAdding}
+                  className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  {isBatchAdding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  Add Selected Skills ({selectedAiSkillIds.size})
+                </button>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {aiSuggestions.map((item) => {
+                  const id = String(item.skillId || item.id);
+                  const isChecked = selectedAiSkillIds.has(id);
+                  const pct = Math.round(item.confidence * 100);
+
+                  return (
+                    <div
+                      key={id}
+                      onClick={() => toggleAiSkill(id)}
+                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                        isChecked 
+                          ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 shadow-sm'
+                          : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}} // Controlled via card click
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
+                        />
+                        <div>
+                          <span className="font-semibold text-xs block">{item.name}</span>
+                          <span className="text-[10px] text-gray-400">{item.category}</span>
+                        </div>
+                      </div>
+
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-indigo-600 dark:text-indigo-400">
+                        {pct}% match
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

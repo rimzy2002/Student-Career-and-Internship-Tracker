@@ -46,8 +46,8 @@ export default function RegisterPage() {
       localStorage.setItem("user", JSON.stringify(data.user));
 
       router.push("/student/dashboard");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -86,9 +86,9 @@ export default function RegisterPage() {
       } else {
         router.push("/student/dashboard");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "An error occurred with Google Sign-In");
+      setError(err instanceof Error ? err.message : "An error occurred with Google Sign-In");
     }
   };
 

@@ -1,0 +1,163 @@
+{
+  "total": 26,
+  "passed": 26,
+  "failed": 0,
+  "results": [
+    {
+      "suite": "Landing Page",
+      "testName": "Page load and Title check",
+      "status": "PASSED",
+      "details": "Title: \"CareerTrack\""
+    },
+    {
+      "suite": "Landing Page",
+      "testName": "Navbar presence",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Landing Page",
+      "testName": "Hero Heading verification",
+      "status": "PASSED",
+      "details": "Heading: \"Launch Your Career Journey\""
+    },
+    {
+      "suite": "Auth Flow",
+      "testName": "Login page renders",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Auth Flow",
+      "testName": "Email and Password input presence",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Auth Flow",
+      "testName": "Login form submit interaction",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Auth Flow",
+      "testName": "Register page renders with name input",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Student Dashboard",
+      "testName": "Dashboard heading visible",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Student Dashboard",
+      "testName": "StatStrip metrics rendered",
+      "status": "PASSED",
+      "details": "Found 23 stat cards"
+    },
+    {
+      "suite": "Student Dashboard",
+      "testName": "Kanban columns (Applied, Interview, Offer, Rejected)",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Student Dashboard",
+      "testName": "Calendar / Schedule widget present",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Applications List",
+      "testName": "All Applications page heading",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Applications List",
+      "testName": "Applications table rendered with rows",
+      "status": "PASSED",
+      "details": "5 applications found"
+    },
+    {
+      "suite": "Applications List",
+      "testName": "Search input accepts query",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "New Application",
+      "testName": "Page renders with title",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "New Application",
+      "testName": "Inline validation for required fields",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "New Application",
+      "testName": "Form inputs accept text entry",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Application Detail",
+      "testName": "Application detail timeline & details",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Skills Tracker",
+      "testName": "My Skills heading visible",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Skills Tracker",
+      "testName": "AI Skill Analysis tool present",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Student Profile",
+      "testName": "Profile page renders student details",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Admin Dashboard",
+      "testName": "Admin Analytics heading visible",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Admin Dashboard",
+      "testName": "View toggle between Charts and Data Table",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Admin Cohorts",
+      "testName": "Cohorts page renders with student batches",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Admin Analytics",
+      "testName": "Analytics page renders with deep metrics",
+      "status": "PASSED",
+      "details": ""
+    },
+    {
+      "suite": "Theme Toggle",
+      "testName": "Theme toggle button checked",
+      "status": "PASSED",
+      "details": "Default theme active"
+    }
+  ]
+}

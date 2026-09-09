@@ -5,6 +5,7 @@ const multer = require('multer');
 const studentSkillsController = require('../controllers/studentSkillsController');
 const skillSuggestionController = require('../controllers/skillSuggestionController');
 const studentProfileController = require('../controllers/studentProfileController');
+const aiMatchController = require('../controllers/aiMatchController');
 
 // Multer Config
 const storage = multer.memoryStorage();
@@ -26,13 +27,21 @@ const requireRole = require('../middleware/requireRole');
 router.use(authenticate);
 router.use(requireRole('student'));
 
-// Personal Skills routes
+// Personal Skills routes (supporting both /me/skills and /skills)
 router.get('/me/skills', studentSkillsController.getMySkills);
+router.get('/skills', studentSkillsController.getMySkills);
 router.post('/me/skills', studentSkillsController.addMySkill);
+router.post('/skills', studentSkillsController.addMySkill);
 router.delete('/me/skills/:skillId', studentSkillsController.removeMySkill);
+router.delete('/skills/:skillId', studentSkillsController.removeMySkill);
 
-// AI Skill Suggestion route
+// AI Skill Suggestion & Resume Match routes
 router.post('/me/skills/suggest', skillSuggestionController.getSuggestions);
+router.post('/skills/suggest', skillSuggestionController.getSuggestions);
+router.post('/me/skill-suggestions', skillSuggestionController.getSuggestions); // compatibility alias
+router.post('/me/resume-match', aiMatchController.matchResumeToJob);
+router.post('/resume-match', aiMatchController.matchResumeToJob);
+
 
 // Profile routes
 router.get('/me/profile', studentProfileController.getProfile);
