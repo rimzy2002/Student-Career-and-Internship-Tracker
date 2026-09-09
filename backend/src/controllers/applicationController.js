@@ -342,3 +342,109 @@ exports.archiveApplication = async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
+
+exports.getApplicationById = async (req, res) => {
+  const studentId = req.user.userId;
+  const applicationId = req.params.id;
+
+  try {
+    const { data: apps, error } = await supabase
+      .from('applications')
+      .select(`
+        id,
+        company_name,
+        role_title,
+        current_status_id,
+        date_applied,
+        notes,
+        created_at,
+        updated_at,
+        application_statuses (
+          id,
+          name
+        ),
+        application_skills (
+          skill_id,
+          skills (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', applicationId)
+      .eq('student_id', studentId)
+      .is('deleted_at', null);
+
+    if (error) throw error;
+
+    if (!apps || apps.length === 0) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    const app = apps[0];
+
+    // Fetch history
+    const { data: history } = await supabase
+      .from('application_status_history')
+      .select('id, status_id, notes, changed_at, application_statuses(name)')
+      .eq('application_id', applicationId)
+      .order('changed_at', { ascending: false });
+
+    const statusName = app.application_statuses?.name || STATUS_ID_TO_NAME[app.current_status_id] || 'Applied';
+    const extractedSkills = (app.application_skills || [])
+      .map(as => as.skills)
+      .filter(Boolean)
+      .map(s => ({ id: String(s.id), name: s.name }));
+
+    const formattedHistory = (history || []).map(h => ({
+      id: String(h.id),
+      status: h.application_statuses?.name || STATUS_ID_TO_NAME[h.status_id] || 'Applied',
+      timestamp: h.changed_at,
+      notes: h.notes
+    }));
+
+    res.status(200).json({
+      id: String(app.id),
+      companyName: app.company_name,
+      roleTitle: app.role_title,
+      dateApplied: app.date_applied,
+      status: statusName,
+      current_status_id: app.current_status_id,
+      notes: app.notes,
+      skills: extractedSkills,
+      history: formattedHistory,
+      createdAt: app.created_at,
+      updatedAt: app.updated_at
+    });
+  } catch (error) {
+    console.error('getApplicationById error:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
+exports.updateApplicationNotes = async (req, res) => {
+  const studentId = req.user.userId;
+  const applicationId = req.params.id;
+  const { notes } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .update({ notes: notes || null, updated_at: new Date().toISOString() })
+      .eq('id', applicationId)
+      .eq('student_id', studentId)
+      .is('deleted_at', null)
+      .select('id, notes');
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    res.status(200).json({ message: 'Notes updated successfully', notes: data[0].notes });
+  } catch (error) {
+    console.error('updateApplicationNotes error:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+

@@ -11,6 +11,8 @@ router.use(requireRole('student'));
 router.get('/', applicationController.getApplications);
 router.post('/', applicationController.createApplication);
 router.get('/:id/history', applicationController.getApplicationHistory);
+router.get('/:id', applicationController.getApplicationById);
+router.patch('/:id/notes', applicationController.updateApplicationNotes);
 router.patch('/:id/status', applicationController.updateApplicationStatus);
 router.put('/:id/status', applicationController.updateApplicationStatus);
 router.patch('/:id/skills', applicationController.updateApplicationSkills);

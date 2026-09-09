@@ -73,7 +73,7 @@ export function KanbanBoard({ initialApplications, onApplicationsChange }: Kanba
     channel.subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase?.removeChannel(channel);
     };
   }, [onApplicationsChange]);
 

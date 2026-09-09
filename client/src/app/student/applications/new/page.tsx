@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skill } from '@/lib/types';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function NewApplicationPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function NewApplicationPage() {
   const [companyName, setCompanyName] = useState('');
   const [roleTitle, setRoleTitle] = useState('');
   const [dateApplied, setDateApplied] = useState(() => new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState('');
   
   // Inline Errors
   const [companyError, setCompanyError] = useState('');
@@ -34,7 +36,7 @@ export default function NewApplicationPage() {
   useEffect(() => {
     async function fetchSkills() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/skills`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/skills`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {
@@ -102,9 +104,9 @@ export default function NewApplicationPage() {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/applications`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/applications`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -114,6 +116,7 @@ export default function NewApplicationPage() {
           company_name: companyName.trim(),
           role_title: roleTitle.trim(),
           date_applied: dateApplied,
+          notes: notes.trim() || undefined,
           skill_ids: selectedSkillIds
         })
       });
@@ -123,7 +126,8 @@ export default function NewApplicationPage() {
         throw new Error(data.message || 'Failed to add application');
       }
 
-      router.push('/student/dashboard');
+      // Redirect immediately to the Applications page so the new application is visible
+      router.push('/student/applications');
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -140,21 +144,21 @@ export default function NewApplicationPage() {
         </div>
       </div>
 
-      <div className="w-full max-w-[420px] space-y-8 bg-card p-8 rounded-2xl shadow-lg border border-border">
+      <div className="w-full max-w-[480px] space-y-6 bg-card p-6 sm:p-8 rounded-2xl shadow-lg border border-border my-8">
         
         <div className="space-y-2">
           <Link 
-            href="/student/dashboard"
-            className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-4 transition-colors"
+            href="/student/applications"
+            className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-2 transition-colors"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
+            Back to Applications
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Add New Application
           </h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Enter the details below to track a new application.
+            Enter the details below to save and track your new application in the database.
           </p>
         </div>
 
@@ -171,47 +175,58 @@ export default function NewApplicationPage() {
           </div>
         )}
 
-        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+        <form className="space-y-5" onSubmit={handleSubmit} noValidate>
           
-          <div className="space-y-2">
-            <Label htmlFor="companyName" className="text-sm font-semibold">Company Name</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="companyName" className="text-sm font-semibold">Company Name *</Label>
             <Input 
               id="companyName" 
               type="text" 
               value={companyName} 
               onChange={(e) => { setCompanyName(e.target.value); if(companyError) setCompanyError(''); }} 
-              placeholder="e.g. Acme Corp" 
-              className={`h-12 bg-background ${companyError ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'}`} 
+              placeholder="e.g. Google, Microsoft, or Local Startup" 
+              className={`h-11 bg-background ${companyError ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'}`} 
             />
             {companyError && <p className="text-xs text-red-500 mt-1">{companyError}</p>}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="roleTitle" className="text-sm font-semibold">Role / Position Title</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="roleTitle" className="text-sm font-semibold">Role / Position Title *</Label>
             <Input 
               id="roleTitle" 
               type="text" 
               value={roleTitle} 
               onChange={(e) => { setRoleTitle(e.target.value); if(roleError) setRoleError(''); }} 
               placeholder="e.g. Software Engineer Intern" 
-              className={`h-12 bg-background ${roleError ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'}`} 
+              className={`h-11 bg-background ${roleError ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'}`} 
             />
             {roleError && <p className="text-xs text-red-500 mt-1">{roleError}</p>}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="dateApplied" className="text-sm font-semibold">Applied Date</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="dateApplied" className="text-sm font-semibold">Applied Date *</Label>
             <Input 
               id="dateApplied" 
               type="date" 
               value={dateApplied} 
               onChange={(e) => { setDateApplied(e.target.value); if(dateError) setDateError(''); }} 
-              className={`h-12 bg-background ${dateError ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'}`} 
+              className={`h-11 bg-background ${dateError ? 'border-red-500 focus-visible:ring-red-500' : 'border-input'}`} 
             />
             {dateError && <p className="text-xs text-red-500 mt-1">{dateError}</p>}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="notes" className="text-sm font-semibold">Notes / Job Link / Details <span className="text-xs text-muted-foreground font-normal">(Optional)</span></Label>
+            <textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Applied via LinkedIn, referral by John, tech stack details..."
+              className="w-full min-h-[90px] p-3 rounded-xl border border-input bg-background text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-y"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label className="text-sm font-semibold">Relevant Skills</Label>
             
             {isLoadingSkills ? (
@@ -220,9 +235,9 @@ export default function NewApplicationPage() {
                 Loading skills...
               </div>
             ) : availableSkills.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">No skills available yet.</p>
+              <p className="text-sm text-muted-foreground italic">No skills available.</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-1 scrollbar-thin">
                 {availableSkills.map((skill) => {
                   const isSelected = selectedSkillIds.includes(skill.id);
                   return (
@@ -231,7 +246,7 @@ export default function NewApplicationPage() {
                       type="button"
                       onClick={() => toggleSkill(skill.id)}
                       className={`
-                        inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition-colors border
+                        inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-colors border
                         ${isSelected 
                           ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
                           : 'bg-background text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
@@ -246,16 +261,16 @@ export default function NewApplicationPage() {
             )}
           </div>
 
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Link href="/student/dashboard">
-              <Button variant="ghost" type="button" className="h-12 px-5 font-medium">
+          <div className="pt-3 flex items-center justify-end gap-3">
+            <Link href="/student/applications">
+              <Button variant="ghost" type="button" className="h-11 px-4 font-medium">
                 Cancel
               </Button>
             </Link>
             <Button 
               type="submit" 
               disabled={isSubmitting} 
-              className="h-12 px-6 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md shadow-sm transition-all hover:shadow-md"
+              className="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl shadow-sm transition-all hover:shadow-md"
             >
               {isSubmitting ? (
                 <>

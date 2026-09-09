@@ -4,14 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { StatStrip } from '@/components/dashboard/stat-strip';
 import { KanbanBoard } from '@/components/dashboard/kanban-board';
 import { CalendarWidget } from '@/components/dashboard/calendar-widget';
-import { mockApplications } from '@/lib/mock-data';
 import { Application } from '@/lib/types';
 import { Plus, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { API_BASE_URL } from '@/lib/api';
 
 export default function DashboardPage() {
-  const [applications, setApplications] = useState<Application[]>(mockApplications);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -31,12 +30,12 @@ export default function DashboardPage() {
 
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setApplications(data);
           }
         }
       } catch (err) {
-        console.warn('Could not fetch live applications, using offline defaults:', err);
+        console.warn('Could not fetch live applications:', err);
       } finally {
         setIsLoading(false);
       }
