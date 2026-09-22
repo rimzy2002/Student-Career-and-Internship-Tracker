@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { supabase } = require('../config/supabase');
+const { verifyGoogleToken } = require('../utils/verifyGoogleToken');
 
 exports.register = async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
@@ -114,16 +115,30 @@ exports.login = async (req, res) => {
 };
 
 exports.googleLogin = async (req, res) => {
-  const { email, firstName, lastName } = req.body;
+  const { idToken } = req.body;
 
-  if (!email || !firstName) {
-    return res.status(400).json({ message: 'Missing email or name from Google payload' });
+  if (!idToken) {
+    return res.status(401).json({ message: 'Authentication required: missing ID token' });
   }
 
   try {
+    const verifiedPayload = await verifyGoogleToken(idToken);
+    const email = verifiedPayload.email;
+
+    if (!email) {
+      return res.status(401).json({ message: 'Google token does not contain a verified email address' });
+    }
+
+    // Derive name from verified token claims
+    const fullName = verifiedPayload.name || '';
+    const nameParts = fullName.trim().split(' ');
+    const firstName = nameParts[0] || 'Student';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // 1. Check for existing user by verified email
     const { data: existingUsers, error: selectError } = await supabase
       .from('users')
-      .select('id, email, role')
+      .select('id, email, role, first_name, last_name')
       .eq('email', email);
 
     if (selectError) throw selectError;
@@ -142,19 +157,20 @@ exports.googleLogin = async (req, res) => {
         .insert([
           {
             first_name: firstName,
-            last_name: lastName || '',
+            last_name: lastName,
             email: email,
             password_hash: randomPasswordHash,
             role: 'student'
           }
         ])
-        .select('id, email, role')
+        .select('id, email, role, first_name, last_name')
         .single();
 
       if (insertError) throw insertError;
       user = insertResult;
     }
 
+    // Generate JWT
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
@@ -164,11 +180,26 @@ exports.googleLogin = async (req, res) => {
     res.status(200).json({
       message: 'Google login successful',
       token,
-      user
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.first_name,
+        lastName: user.last_name
+      }
     });
 
   } catch (error) {
-    console.error('Google login error:', error);
+    if (
+      error.name === 'TokenExpiredError' ||
+      error.name === 'JsonWebTokenError' ||
+      error.name?.startsWith('Token')
+    ) {
+      return res.status(401).json({ message: 'Invalid or expired Google authentication token' });
+    }
+
+    console.error('Google login internal error:', error.message);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };
+

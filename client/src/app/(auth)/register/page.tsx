@@ -60,19 +60,13 @@ export default function RegisterPage() {
       const result = await signInWithPopup(auth, provider);
       
       const user = result.user;
-      const nameParts = (user.displayName || "").split(" ");
-      const firstName = nameParts[0] || "Student";
-      const lastName = nameParts.slice(1).join(" ") || "";
+      const idToken = await user.getIdToken();
 
-      // Send to backend
+      // Send verified identity token to backend
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/auth/google`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          email: user.email, 
-          firstName, 
-          lastName 
-        }),
+        body: JSON.stringify({ idToken }),
       });
 
       const data = await res.json();
