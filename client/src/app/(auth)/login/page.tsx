@@ -19,6 +19,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const getPostLoginRedirect = (role: string) => {
+    if (typeof window !== "undefined") {
+      const redirectParam = new URLSearchParams(window.location.search).get("redirect");
+      if (redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")) {
+        if (role === "admin" && redirectParam.startsWith("/admin")) {
+          return redirectParam;
+        }
+        if (role === "student" && redirectParam.startsWith("/student")) {
+          return redirectParam;
+        }
+      }
+    }
+    return role === "admin" ? "/admin/dashboard" : "/student/dashboard";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -40,11 +55,7 @@ export default function LoginPage() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      if (data.user.role === 'admin') {
-        router.push("/admin/dashboard");
-      } else {
-        router.push("/student/dashboard");
-      }
+      router.push(getPostLoginRedirect(data.user.role));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -59,19 +70,13 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, provider);
       
       const user = result.user;
-      const nameParts = (user.displayName || "").split(" ");
-      const firstName = nameParts[0] || "Student";
-      const lastName = nameParts.slice(1).join(" ") || "";
+      const idToken = await user.getIdToken();
 
-      // Send to backend
+      // Send verified identity token to backend
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/v1/auth/google`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          email: user.email, 
-          firstName, 
-          lastName 
-        }),
+        body: JSON.stringify({ idToken }),
       });
 
       const data = await res.json();
@@ -80,16 +85,13 @@ export default function LoginPage() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      if (data.user.role === 'admin') {
-        router.push("/admin/dashboard");
-      } else {
-        router.push("/student/dashboard");
-      }
+      router.push(getPostLoginRedirect(data.user.role));
     } catch (err: unknown) {
       console.error(err);
       setError(err instanceof Error ? err.message : "An error occurred with Google Sign-In");
     }
   };
+
 
   return (
     <div className="flex w-full flex-grow bg-background">
