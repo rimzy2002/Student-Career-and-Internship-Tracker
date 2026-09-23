@@ -12,9 +12,12 @@ import {
   Briefcase, 
   RefreshCw, 
   X, 
-  AlertCircle
+  AlertCircle,
+  Download,
+  CheckCircle2
 } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/api';
+import { exportApplicationsToCsv } from '@/lib/export-utils';
 
 const STATUS_COLORS: Record<ApplicationStatus, string> = {
   'Applied': 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
@@ -32,6 +35,17 @@ export default function ApplicationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | ApplicationStatus>('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [exportNotice, setExportNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+
+  const handleExportCSV = () => {
+    const result = exportApplicationsToCsv(applications);
+    if (!result.success) {
+      setExportNotice({ message: result.message || 'No data available to export.', type: 'error' });
+    } else {
+      setExportNotice({ message: `Exported ${result.rowCount} applications to CSV.`, type: 'success' });
+    }
+    setTimeout(() => setExportNotice(null), 3500);
+  };
 
   const fetchApplications = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -71,7 +85,14 @@ export default function ApplicationsPage() {
   };
 
   useEffect(() => {
-    fetchApplications();
+    let isMounted = true;
+    const load = async () => {
+      if (isMounted) await fetchApplications();
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Filtered applications
@@ -157,6 +178,16 @@ export default function ApplicationsPage() {
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
             </button>
 
+            <button
+              onClick={handleExportCSV}
+              disabled={isLoading}
+              title="Export applications to CSV"
+              className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors font-medium text-sm shadow-sm disabled:opacity-50 shrink-0"
+            >
+              <Download className="w-4 h-4 sm:mr-2 text-gray-500 dark:text-gray-400" />
+              <span>Export CSV</span>
+            </button>
+
             <Link 
               href="/student/applications/new"
               className="inline-flex items-center justify-center px-5 py-2.5 
@@ -172,6 +203,25 @@ export default function ApplicationsPage() {
             </Link>
           </div>
         </div>
+
+        {/* Export Notification Banner */}
+        {exportNotice && (
+          <div 
+            data-testid="export-notice"
+            className={`p-3 rounded-xl border text-sm flex items-center gap-2 transition-all ${
+              exportNotice.type === 'error'
+                ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+            }`}
+          >
+            {exportNotice.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+            )}
+            <span>{exportNotice.message}</span>
+          </div>
+        )}
 
         {/* Filter and Search Bar */}
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white dark:bg-gray-800/80 p-3 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-700/50 shadow-sm">
@@ -268,7 +318,7 @@ export default function ApplicationsPage() {
               No Applications Saved Yet
             </h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm max-w-md mx-auto mb-6">
-              You haven't tracked any job or internship applications yet. Add your first application to start tracking interview stages and outcomes.
+              You haven&apos;t tracked any job or internship applications yet. Add your first application to start tracking interview stages and outcomes.
             </p>
             <Link
               href="/student/applications/new"

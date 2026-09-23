@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { TrendingUp, AlertTriangle, Layers, ArrowRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Layers, ArrowRight, AlertCircle, RefreshCw, Download, CheckCircle2 } from 'lucide-react';
 import { AdminStatStrip } from '@/components/admin/admin-stat-strip';
 import { AnalyticsCharts } from '@/components/admin/analytics-charts';
 import { ApplicationAnalytics, SkillAnalytics } from '@/lib/types';
 import { API_BASE_URL } from '@/lib/api';
+import { exportAdminAnalyticsToCsv } from '@/lib/export-utils';
 
 export default function AnalyticsPage() {
   const [appAnalytics, setAppAnalytics] = useState<ApplicationAnalytics[] | null>(null);
@@ -15,6 +16,21 @@ export default function AnalyticsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [exportNotice, setExportNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+
+  const handleExportCSV = () => {
+    const result = exportAdminAnalyticsToCsv({
+      appAnalytics,
+      skillAnalytics,
+      totalStudents
+    });
+    if (!result.success) {
+      setExportNotice({ message: result.message || 'No data available to export.', type: 'error' });
+    } else {
+      setExportNotice({ message: `Exported ${result.rowCount} analytics records to CSV.`, type: 'success' });
+    }
+    setTimeout(() => setExportNotice(null), 3500);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -120,14 +136,45 @@ export default function AnalyticsPage() {
             </p>
           </div>
           
-          <Link
-            href="/admin/dashboard"
-            className="inline-flex items-center px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-          >
-            Dashboard Overview
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleExportCSV}
+              disabled={isLoading}
+              title="Export analytics to CSV"
+              className="inline-flex items-center px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/60 text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
+              <span>Export CSV</span>
+            </button>
+
+            <Link
+              href="/admin/dashboard"
+              className="inline-flex items-center px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+            >
+              Dashboard Overview
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Link>
+          </div>
         </div>
+
+        {/* Export Notification Banner */}
+        {exportNotice && (
+          <div 
+            data-testid="analytics-export-notice"
+            className={`p-3 rounded-xl border text-sm flex items-center gap-2 transition-all ${
+              exportNotice.type === 'error'
+                ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                : 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+            }`}
+          >
+            {exportNotice.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+            )}
+            <span>{exportNotice.message}</span>
+          </div>
+        )}
 
         {/* Analytics Section Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
