@@ -129,14 +129,45 @@ export default function AnalyticsPage() {
           </Link>
         </div>
 
-        {/* Loading State */}
+        {/* Analytics Section Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div id="funnel" className="rounded-2xl p-6 bg-white dark:bg-gray-800/90 shadow-sm border border-gray-100 dark:border-gray-700/50 scroll-mt-28">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-4">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Application Funnel</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Track drop-offs from initial application through final accepted offer.
+            </p>
+            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{interviewRateLabel}</span>
+          </div>
+
+          <div id="placement-rates" className="rounded-2xl p-6 bg-white dark:bg-gray-800/90 shadow-sm border border-gray-100 dark:border-gray-700/50 scroll-mt-28">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center mb-4">
+              <Layers className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Placement Rates</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Monitor career outcomes by degree, major, and graduation year.
+            </p>
+            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">{placementRateLabel}</span>
+          </div>
+
+          <div id="skill-gaps" className="rounded-2xl p-6 bg-white dark:bg-gray-800/90 shadow-sm border border-gray-100 dark:border-gray-700/50 scroll-mt-28">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Skill Gap Analysis</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Identify top missing industry skills required by recruiters.
+            </p>
+            <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">{skillGapLabel}</span>
+          </div>
+        </div>
+
+        {/* Dynamic Data Area: Loading, Error, or Charts & Stats */}
         {isLoading ? (
           <div className="animate-pulse space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-36 bg-gray-200 dark:bg-gray-800 rounded-2xl" />
-              ))}
-            </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[1, 2, 3].map(i => (
                 <div key={i} className="h-32 bg-gray-200 dark:bg-gray-800 rounded-2xl" />
@@ -167,42 +198,6 @@ export default function AnalyticsPage() {
           </div>
         ) : (
           <>
-            {/* Analytics Section Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="rounded-2xl p-6 bg-white dark:bg-gray-800/90 shadow-sm border border-gray-100 dark:border-gray-700/50">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-4">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Application Funnel</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Track drop-offs from initial application through final accepted offer.
-                </p>
-                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{interviewRateLabel}</span>
-              </div>
-
-              <div className="rounded-2xl p-6 bg-white dark:bg-gray-800/90 shadow-sm border border-gray-100 dark:border-gray-700/50">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center mb-4">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Placement Rates</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Monitor career outcomes by degree, major, and graduation year.
-                </p>
-                <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">{placementRateLabel}</span>
-              </div>
-
-              <div className="rounded-2xl p-6 bg-white dark:bg-gray-800/90 shadow-sm border border-gray-100 dark:border-gray-700/50">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center mb-4">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Skill Gap Analysis</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Identify top missing industry skills required by recruiters.
-                </p>
-                <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">{skillGapLabel}</span>
-              </div>
-            </div>
-
             {/* Global Stats */}
             <AdminStatStrip 
               applicationAnalytics={appAnalytics || []} 
