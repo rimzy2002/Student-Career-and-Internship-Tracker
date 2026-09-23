@@ -48,6 +48,85 @@ const normalizeDegree = (deg) => {
   return 3; // default bachelor equivalent
 };
 
+const calculateMatchScore = (job, candidate) => {
+  const rawMandatory = Array.isArray(job?.mandatory_skills) ? job.mandatory_skills : [];
+  const rawPreferred = Array.isArray(job?.preferred_skills) ? job.preferred_skills : [];
+  const rawCandidateSkills = Array.isArray(candidate?.skills) ? candidate.skills : [];
+
+  const candidateSkillNormalized = new Set(rawCandidateSkills.map(s => normalizeSkill(s)));
+
+  // Categorize mandatory matches
+  const matched_mandatory = [];
+  const missing_mandatory = [];
+  for (const skill of rawMandatory) {
+    if (candidateSkillNormalized.has(normalizeSkill(skill))) {
+      matched_mandatory.push(skill);
+    } else {
+      missing_mandatory.push(skill);
+    }
+  }
+
+  // Categorize preferred matches
+  const matched_preferred = [];
+  const missing_preferred = [];
+  for (const skill of rawPreferred) {
+    if (candidateSkillNormalized.has(normalizeSkill(skill))) {
+      matched_preferred.push(skill);
+    } else {
+      missing_preferred.push(skill);
+    }
+  }
+
+  // Weight allocation:
+  // - Mandatory Skills: 45 points
+  // - Preferred Skills: 25 points
+  // - Experience Level: 20 points
+  // - Education Match: 10 points
+  const mandatoryScore = rawMandatory.length > 0 
+    ? Math.round((matched_mandatory.length / rawMandatory.length) * 45) 
+    : 45;
+
+  const preferredScore = rawPreferred.length > 0 
+    ? Math.round((matched_preferred.length / rawPreferred.length) * 25) 
+    : 25;
+
+  const requiredExp = Math.max(0, Number(job?.required_years_experience) || 0);
+  const candidateExp = Math.max(0, Number(candidate?.years_experience) || 0);
+  let experienceScore = 20;
+  if (requiredExp > 0) {
+    experienceScore = Math.min(20, Math.round((candidateExp / requiredExp) * 20));
+  }
+
+  const reqEduRank = normalizeDegree(job?.required_education_level);
+  const candEduRank = normalizeDegree(candidate?.education_level);
+  let educationScore = 10;
+  if (candEduRank < reqEduRank) {
+    educationScore = candEduRank === reqEduRank - 1 ? 6 : 3;
+  }
+
+  const overallScore = Math.min(100, Math.max(0, mandatoryScore + preferredScore + experienceScore + educationScore));
+
+  return {
+    overallScore,
+    mandatoryScore,
+    preferredScore,
+    experienceScore,
+    educationScore,
+    matched_mandatory,
+    missing_mandatory,
+    matched_preferred,
+    missing_preferred,
+    candidateExp,
+    requiredExp,
+    rawMandatory,
+    rawPreferred
+  };
+};
+
+exports.calculateMatchScore = calculateMatchScore;
+exports.normalizeSkill = normalizeSkill;
+exports.normalizeDegree = normalizeDegree;
+
 exports.matchResumeToJob = async (req, res) => {
   const studentId = req.user?.userId;
   const { job_description, resume_text } = req.body;
@@ -215,62 +294,22 @@ Extract structured facts and output ONLY valid JSON without markdown formatting,
     const { job, candidate, recommended_resume_changes, suggested_learning_priorities } = parsedExtraction;
 
     // 4. Deterministic Mathematical Scoring Engine (Defensible 0 - 100 Formula)
-    const rawMandatory = Array.isArray(job?.mandatory_skills) ? job.mandatory_skills : [];
-    const rawPreferred = Array.isArray(job?.preferred_skills) ? job.preferred_skills : [];
-    const rawCandidateSkills = Array.isArray(candidate?.skills) ? candidate.skills : [];
-
-    const candidateSkillNormalized = new Set(rawCandidateSkills.map(s => normalizeSkill(s)));
-
-    // Categorize mandatory matches
-    const matched_mandatory = [];
-    const missing_mandatory = [];
-    for (const skill of rawMandatory) {
-      if (candidateSkillNormalized.has(normalizeSkill(skill))) {
-        matched_mandatory.push(skill);
-      } else {
-        missing_mandatory.push(skill);
-      }
-    }
-
-    // Categorize preferred matches
-    const matched_preferred = [];
-    const missing_preferred = [];
-    for (const skill of rawPreferred) {
-      if (candidateSkillNormalized.has(normalizeSkill(skill))) {
-        matched_preferred.push(skill);
-      } else {
-        missing_preferred.push(skill);
-      }
-    }
-
-    // Weight allocation:
-    // - Mandatory Skills: 45 points
-    // - Preferred Skills: 25 points
-    // - Experience Level: 20 points
-    // - Education Match: 10 points
-    const mandatoryScore = rawMandatory.length > 0 
-      ? Math.round((matched_mandatory.length / rawMandatory.length) * 45) 
-      : 45;
-
-    const preferredScore = rawPreferred.length > 0 
-      ? Math.round((matched_preferred.length / rawPreferred.length) * 25) 
-      : 25;
-
-    const requiredExp = Math.max(0, Number(job?.required_years_experience) || 0);
-    const candidateExp = Math.max(0, Number(candidate?.years_experience) || 0);
-    let experienceScore = 20;
-    if (requiredExp > 0) {
-      experienceScore = Math.min(20, Math.round((candidateExp / requiredExp) * 20));
-    }
-
-    const reqEduRank = normalizeDegree(job?.required_education_level);
-    const candEduRank = normalizeDegree(candidate?.education_level);
-    let educationScore = 10;
-    if (candEduRank < reqEduRank) {
-      educationScore = candEduRank === reqEduRank - 1 ? 6 : 3;
-    }
-
-    const overallScore = Math.min(100, Math.max(0, mandatoryScore + preferredScore + experienceScore + educationScore));
+    const scoreResult = calculateMatchScore(job, candidate);
+    const {
+      overallScore,
+      mandatoryScore,
+      preferredScore,
+      experienceScore,
+      educationScore,
+      matched_mandatory,
+      missing_mandatory,
+      matched_preferred,
+      missing_preferred,
+      candidateExp,
+      requiredExp,
+      rawMandatory,
+      rawPreferred
+    } = scoreResult;
 
     res.status(200).json({
       overall_score: overallScore,
