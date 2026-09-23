@@ -64,8 +64,8 @@ Applying for internships and tracking job applications is frequently chaotic for
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4, Framer Motion, Recharts, `@dnd-kit`, Lucide React |
-| **Backend** | Node.js (>= 18), Express 5, CORS, Multer |
+| **Frontend** | Next.js 16.3.6 (App Router), React 19.2.4, TypeScript, Tailwind CSS v4, Framer Motion, Recharts, `@dnd-kit`, Lucide React |
+| **Backend** | Node.js (>= 18), Express 5, CORS, Multer, `express-rate-limit` |
 | **Database** | Supabase PostgreSQL (Foreign key constraints, CASCADE deletes, JSON aggregations, indexing) |
 | **Authentication** | Dual-layer: Native bcrypt (10 rounds) + CareerTrack JWT, and Google Sign-In via Firebase Auth token verification (RS256) |
 | **AI / APIs** | NVIDIA NIM API (`meta/llama-3.1-70b-instruct`) or Google Gemini API (structured extraction) |
@@ -78,7 +78,7 @@ Applying for internships and tracking job applications is frequently chaotic for
 
 ```mermaid
 graph TD
-    subgraph Client ["Client (Next.js 16 / React 19)"]
+    subgraph Client ["Client (Next.js 16.3.6 / React 19.2.4)"]
         UI[Pages & Components]
         AG[AuthGuard Route Shield]
         CSV[Native CSV Generator]
@@ -91,6 +91,7 @@ graph TD
     end
 
     subgraph Server ["Backend API (Express 5 / Node.js)"]
+        RATE_MW[Rate Limit Middleware]
         AUTH_MW[JWT Auth Middleware]
         RBAC_MW[Role Guard Middleware]
         AUTH_CTRL[Auth Controller]
@@ -121,14 +122,15 @@ graph TD
     UI --> AG
     UI --> DND
     UI --> CSV
-    UI -- "Bearer JWT" --> AUTH_MW
+    UI -- "HTTP Requests" --> RATE_MW
+    RATE_MW --> AUTH_MW
+    AUTH_MW -- "Bearer JWT" --> RBAC_MW
     FB -- "idToken" --> AUTH_CTRL
 
     %% Auth Verification
     AUTH_CTRL -- "Verify RS256 Signature" --> GC
 
     %% Middleware & Controllers
-    AUTH_MW --> RBAC_MW
     RBAC_MW --> APP_CTRL
     RBAC_MW --> COHORT_CTRL
     RBAC_MW --> AI_CTRL
@@ -174,6 +176,7 @@ Student-Career-and-Internship-Tracker/
 │   │   │   └── studentSkillsController.js   # Student skills portfolio
 │   │   ├── middleware/
 │   │   │   ├── auth.js                  # JWT token verification middleware
+│   │   │   ├── rateLimiters.js          # API rate limiting middleware
 │   │   │   └── requireRole.js           # Role-based access control (student/admin)
 │   │   ├── routes/
 │   │   │   ├── adminRoutes.js           # /api/v1/admin endpoints
@@ -183,12 +186,16 @@ Student-Career-and-Internship-Tracker/
 │   │   │   └── studentRoutes.js         # /api/v1/students endpoints
 │   │   └── utils/
 │   │       └── verifyGoogleToken.js     # Google RS256 cert verification utility
+│   ├── scripts/
+│   │   └── createAdmin.js              # Secure CLI admin bootstrap script
 │   ├── tests/
 │   │   ├── helpers/
 │   │   │   └── mockHttp.js              # Mock Express request/response helpers
-│   │   ├── adminCohorts.test.js         # Cohort aggregation & route security tests
 │   │   ├── applications.test.js         # Application workflow & lifecycle tests
 │   │   ├── auth.test.js                 # Authentication & authorization test suite
+│   │   ├── cohorts.test.js              # Cohort aggregation & route security tests
+│   │   ├── createAdmin.test.js          # Admin bootstrap CLI validation tests
+│   │   ├── rateLimit.test.js            # Auth & AI rate limiting test suite
 │   │   └── scoring.test.js              # Deterministic resume/job scoring tests
 │   ├── package.json
 │   ├── server.js                        # HTTP server entry point
@@ -230,23 +237,20 @@ Student-Career-and-Internship-Tracker/
 
 ## Authentication & Security
 
-CareerTrack implements defense-in-depth authentication across client and server layers:
+CareerTrack implements defense-in-depth security across client and server layers:
 
-1. **Dual Authentication Channels:**
-   - **Email & Password:** Passwords are hashed with `bcrypt` (10 salt rounds) before persistence. Authentication generates a signed CareerTrack JWT.
-   - **Google Sign-In:** Authenticates on the client via Firebase Auth SDK, issuing a Google ID token. The backend verifies this token against Google's public certificates via RS256 signature verification.
-2. **Cryptographic Google Token Verification (`verifyGoogleToken.js`):**
-   - Fetches Google's public signing certificates dynamically with in-memory caching honoring HTTP `Cache-Control: max-age`.
-   - Validates that the token algorithm is `RS256`, matches the certificate `kid`, and verifies that `aud` matches the configured `FIREBASE_PROJECT_ID` and `iss` matches `https://securetoken.google.com/<PROJECT_ID>`.
-   - Prevents forged client payloads from creating unauthorized accounts or accessing data.
-3. **Stateless JWT Authorization:**
-   - All protected backend routes pass through `authenticate` middleware, requiring an `Authorization: Bearer <token>` header.
-   - Decoded payloads contain `{ userId, role }`.
-4. **Role-Based Access Control (RBAC):**
-   - The backend enforces role restrictions via `requireRole('admin')` middleware. Students attempting to invoke administrative endpoints receive an immediate `403 Forbidden`.
-5. **Client-Side AuthGuard:**
-   - Protected routes under `/student/*` and `/admin/*` are wrapped with `<AuthGuard allowedRole="...">`.
-   - Prevents layout flashes by checking active JWT tokens, decoding expiration timestamps, and verifying role permissions before rendering children.
+1. **Bcrypt Password Hashing:** User passwords are salted and hashed with `bcrypt` (10 rounds) prior to database persistence. Plaintext passwords are never stored.
+2. **Stateless JWT Authentication:** Authenticated user sessions issue signed CareerTrack JWTs. All protected API endpoints pass through `authenticate` middleware, requiring an `Authorization: Bearer <token>` header and verifying `{ userId, role }`.
+3. **Cryptographic Google Token Verification (`verifyGoogleToken.js`):** Client-side Google Sign-In issues a Firebase ID token. The backend verifies the token directly against Google's public signing certificates via RS256 signature verification, caching certificates dynamically according to `Cache-Control: max-age` and strictly validating token algorithm, expiration, project audience, and issuer.
+4. **Role-Based Access Control (RBAC):** Backend endpoints enforce strict role separation using `requireRole('admin')` middleware. Unauthorized role attempts receive immediate `403 Forbidden` responses.
+5. **Student Ownership Isolation:** Backend controllers strictly enforce student tenant isolation at the query layer by scoping all student record access with `.eq('student_id', userId)`.
+   > **Note on PostgreSQL Row-Level Security (RLS):** Because backend services connect using Supabase service-role credentials to execute administrative, aggregation, and operational queries, requests bypass PostgreSQL RLS policies. Multi-tenant isolation and ownership checks are therefore strictly enforced at the application controller level.
+6. **Frontend AuthGuard:** Client-side routes under `/student/*` and `/admin/*` are shielded by `<AuthGuard allowedRole="...">`, decoding token expiration and validating permissions before rendering protected layouts.
+7. **API Rate Limiting (`express-rate-limit`):**
+   - **Authentication Endpoints:** `/api/v1/auth/register`, `/api/v1/auth/login`, and `/api/v1/auth/google` are throttled to a maximum of **10 attempts per IP address per 15-minute window** to mitigate brute-force and credential-stuffing attacks. Requests exceeding the threshold receive a `429 Too Many Requests` response with standard `RateLimit-*` headers.
+   - **AI Resume Matching:** `/api/v1/students/me/resume-match` is restricted to **10 requests per authenticated student per hour** (keyed by authenticated student ID) to protect external AI provider quotas from runaway usage.
+   - *(Note: Application-level rate limiting protects against credential brute-forcing and quota exhaustion; it does not replace edge-layer DDoS mitigation or web application firewalls.)*
+8. **Secure Environment-Driven Admin Bootstrap:** Initial administrators are created on-demand via `npm run create-admin` using runtime environment variables (`ADMIN_EMAIL`, `ADMIN_PASSWORD`). No default administrator accounts or preset passwords exist in database seed files or code.
 
 ---
 
@@ -336,16 +340,18 @@ CareerTrack maintains automated test suites covering core business logic, API se
 ### 1. Backend Automated Tests (Node.js Built-in Runner)
 - **Framework:** Node.js native `node:test` and `node:assert` (0 external test dependencies).
 - **Execution:** Offline execution with mocked Supabase query builders; **zero mutation of production database data**.
-- **Current Status:** **53 tests passing across 4 test suites**:
-  1. `applications.test.js`: Input validation, status transition lifecycle, ownership protection, and soft deletion.
+- **Current Status:** **78 / 78 passing** across test suites:
+  1. `applications.test.js`: Input validation, status transition lifecycle, student ownership isolation, and soft deletion.
   2. `auth.test.js`: Registration validation, login validation, Google RS256 token verification, JWT middleware, and RBAC enforcement.
-  3. `adminCohorts.test.js`: Pure cohort aggregation algorithm, division-by-zero protection, offer deduplication, and admin route protection.
+  3. `cohorts.test.js`: Pure cohort aggregation algorithm, division-by-zero protection, offer deduplication, and admin route protection.
   4. `scoring.test.js`: Skill normalization, alias mapping, degree hierarchy ranking, experience caps, 0%/100% boundary testing, and missing-input safety.
+  5. `rateLimit.test.js`: Authentication rate limiting (10 attempts / 15m), AI resume matching rate limiting (10 requests / hr per student), and standard header validation.
+  6. `createAdmin.test.js`: Secure admin bootstrap validation, environment parsing, bcrypt password hashing, and duplicate handling.
 
 ### 2. End-to-End Tests (Playwright)
 - **Script:** [`client/playwright_e2e_test.js`](file:///d:/Mern-stack/DevTools/project/Student-Career-and-Internship-Tracker/client/playwright_e2e_test.js)
 - **Scope:** 26 test scenarios covering 12 distinct views (Landing page, Auth flows, Student Dashboard, Applications List, Application Detail, Skills Tracker, Profile, Admin Dashboard, Admin Cohorts, Admin Analytics, and Theme Toggle).
-- **Current Live Baseline:** **22 / 26 passing** on live PostgreSQL configuration. *(Four pre-existing tests check for static mock-table DOM selectors rather than dynamic live database rows; see [Current Limitations](#current-limitations)).*
+- **Current Live Baseline:** **26 / 26 passing** (100% current E2E baseline) across all critical user and administrative journeys on the live application.
 
 ---
 
@@ -398,7 +404,25 @@ npm run dev
 ```
 The backend server runs on `http://localhost:5000`.
 
-### 4. Frontend Setup
+### 4. Create Initial Admin Account
+CareerTrack does not ship with default admin credentials or insecure database seeds. Create the initial administrator on-demand via the CLI bootstrap script:
+
+```bash
+cd backend
+ADMIN_EMAIL="admin@yourinstitution.edu" ADMIN_PASSWORD="your-secure-password" npm run create-admin
+```
+
+Optional configuration variables:
+- `ADMIN_FIRST_NAME`: Administrator first name (default: `"System"`)
+- `ADMIN_LAST_NAME`: Administrator last name (default: `"Admin"`)
+
+Key characteristics:
+- Passwords are salted and hashed with `bcrypt` (10 salt rounds) prior to database insertion.
+- No default administrator password exists in the repository.
+- Admin creation is manual and on-demand.
+- If the email already exists, duplicate creation is handled safely without overwriting data.
+
+### 5. Frontend Setup
 ```bash
 cd ../client
 npm install
@@ -460,14 +484,14 @@ The client application runs on `http://localhost:3000`.
 ## Running Tests
 
 ### Backend Automated Test Suite
-Runs all 53 automated unit and integration tests:
+Runs all 78 automated unit and integration tests:
 ```bash
 cd backend
 npm test
 ```
 
 ### Frontend E2E Test Suite (Playwright)
-Executes browser-level end-to-end tests:
+Executes browser-level end-to-end tests (26 / 26 passing baseline):
 ```bash
 cd client
 node playwright_e2e_test.js
@@ -479,9 +503,8 @@ node playwright_e2e_test.js
 
 In the interest of engineering transparency, the current implementation has the following known boundaries:
 
-1. **Calendar Milestones:** The milestone calendar currently maps application submission dates (`date_applied`). Dedicated tables or fields for interview rounds, technical screens, and offer acceptance deadlines have not yet been introduced into the schema.
-2. **Playwright Test Baseline:** 22 out of 26 Playwright E2E tests pass against live PostgreSQL data. Four legacy tests assert DOM elements and row counts based on static mock datasets rather than live database tables.
-3. **AI Provider Availability:** External AI extraction depends on active network connectivity and valid API credentials for NVIDIA NIM or Google Gemini. When credentials are not configured, fallback handlers prevent crashes but cannot extract skills from raw unstructured text.
+1. **Calendar Milestones & Interview Scheduling:** The milestone calendar currently aggregates application submission dates (`date_applied`). Dedicated database fields or tables for distinct interview rounds, technical screening stages, and offer acceptance deadlines are not yet stored.
+2. **External AI Provider Configuration:** External AI resume matching and extraction rely on valid provider credentials (`NVIDIA_API_KEY` or `GEMINI_API_KEY`) and active network connectivity. When neither key is supplied, fallback mechanisms prevent system crashes but cannot parse unstructured requirements from raw text.
 
 ---
 
