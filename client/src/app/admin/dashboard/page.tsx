@@ -4,26 +4,87 @@ import React, { useState, useEffect } from 'react';
 import { AdminStatStrip } from '@/components/admin/admin-stat-strip';
 import { AnalyticsCharts } from '@/components/admin/analytics-charts';
 import { AnalyticsTable } from '@/components/admin/analytics-table';
-import { mockApplicationAnalytics, mockSkillAnalytics } from '@/lib/mock-data';
 import { ApplicationAnalytics, SkillAnalytics } from '@/lib/types';
-import { LayoutDashboard, Table as TableIcon } from 'lucide-react';
+import { API_BASE_URL } from '@/lib/api';
+import { LayoutDashboard, Table as TableIcon, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function AdminDashboardPage() {
   const [appAnalytics, setAppAnalytics] = useState<ApplicationAnalytics[] | null>(null);
   const [skillAnalytics, setSkillAnalytics] = useState<SkillAnalytics[] | null>(null);
+  const [totalStudents, setTotalStudents] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'charts' | 'table'>('charts');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    // Simulate API fetch delay
-    const timer = setTimeout(() => {
-      setAppAnalytics(mockApplicationAnalytics);
-      setSkillAnalytics(mockSkillAnalytics);
-      setIsLoading(false);
-    }, 1000);
+    let isMounted = true;
 
-    return () => clearTimeout(timer);
-  }, []);
+    async function loadData() {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        if (isMounted) setIsLoading(false);
+        return;
+      }
+
+      try {
+        const [appsRes, skillsRes, studentsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/v1/admin/analytics/applications`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch(`${API_BASE_URL}/api/v1/admin/analytics/skills`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch(`${API_BASE_URL}/api/v1/admin/analytics/students`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        ]);
+
+        if (!appsRes.ok) {
+          throw new Error(`Failed to load application analytics (${appsRes.status})`);
+        }
+        if (!skillsRes.ok) {
+          throw new Error(`Failed to load skill analytics (${skillsRes.status})`);
+        }
+
+        const appsData = await appsRes.json();
+        const skillsData = await skillsRes.json();
+
+        if (isMounted) {
+          setAppAnalytics(Array.isArray(appsData) ? appsData : []);
+          setSkillAnalytics(Array.isArray(skillsData) ? skillsData : []);
+        }
+
+        if (studentsRes.ok) {
+          const studentsData = await studentsRes.json();
+          if (isMounted) {
+            setTotalStudents(typeof studentsData?.count === 'number' ? studentsData.count : 0);
+          }
+        }
+      } catch (err) {
+        console.warn('Admin analytics fetch failed:', err instanceof Error ? err.message : err);
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to fetch analytics from server');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [retryCount]);
+
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError(null);
+    setRetryCount(prev => prev + 1);
+  };
 
   return (
     <div className="min-h-screen p-6 md:p-8 transition-colors duration-500
@@ -80,12 +141,31 @@ export default function AdminDashboardPage() {
               <div className="h-[400px] bg-gray-200 dark:bg-gray-800 rounded-2xl" />
             </div>
           </div>
+        ) : error ? (
+          /* Error State */
+          <div className="rounded-2xl p-8 bg-red-50/60 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Unable to load analytics</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{error}</p>
+            </div>
+            <button
+              onClick={handleRetry}
+              className="inline-flex items-center px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors shadow-sm"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </button>
+          </div>
         ) : (
           <>
             {/* Stats Summary Strip */}
             <AdminStatStrip 
               applicationAnalytics={appAnalytics || []} 
               skillAnalytics={skillAnalytics || []} 
+              totalStudents={totalStudents}
             />
 
             {/* View Toggle Content */}
@@ -111,3 +191,4 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+

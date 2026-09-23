@@ -82,3 +82,19 @@ exports.getApplicationsAnalytics = async (req, res) => {
   }
 };
 
+exports.getStudentsAnalytics = async (req, res) => {
+  try {
+    const { count, error } = await supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'student');
+
+    if (error) throw error;
+
+    res.status(200).json({ count: count || 0 });
+  } catch (error) {
+    console.error('getStudentsAnalytics error:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
