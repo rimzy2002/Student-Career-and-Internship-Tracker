@@ -22,6 +22,7 @@ const upload = multer({
 });
 const authenticate = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
+const { aiMatchLimiter } = require('../middleware/rateLimiters');
 
 // All student routes require authentication and 'student' role
 router.use(authenticate);
@@ -39,8 +40,8 @@ router.delete('/skills/:skillId', studentSkillsController.removeMySkill);
 router.post('/me/skills/suggest', skillSuggestionController.getSuggestions);
 router.post('/skills/suggest', skillSuggestionController.getSuggestions);
 router.post('/me/skill-suggestions', skillSuggestionController.getSuggestions); // compatibility alias
-router.post('/me/resume-match', aiMatchController.matchResumeToJob);
-router.post('/resume-match', aiMatchController.matchResumeToJob);
+router.post('/me/resume-match', aiMatchLimiter, aiMatchController.matchResumeToJob);
+router.post('/resume-match', aiMatchLimiter, aiMatchController.matchResumeToJob);
 
 
 // Profile routes
