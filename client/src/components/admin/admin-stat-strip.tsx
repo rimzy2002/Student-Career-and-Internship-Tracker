@@ -5,6 +5,7 @@ import { Layers, Users, AlertTriangle, LucideIcon } from 'lucide-react';
 interface AdminStatStripProps {
   applicationAnalytics: ApplicationAnalytics[];
   skillAnalytics: SkillAnalytics[];
+  totalStudents?: number;
 }
 
 interface StatItem {
@@ -15,13 +16,12 @@ interface StatItem {
   bg: string;
 }
 
-export function AdminStatStrip({ applicationAnalytics, skillAnalytics }: AdminStatStripProps) {
-  const totalApplications = applicationAnalytics.reduce((acc, curr) => acc + curr.count, 0);
+export function AdminStatStrip({ applicationAnalytics, skillAnalytics, totalStudents = 0 }: AdminStatStripProps) {
+  const totalApplications = (applicationAnalytics || []).reduce((acc, curr) => acc + (curr.count || 0), 0);
   
-  // Mocked value for total students until backend endpoint is available
-  const totalStudents = 142; 
-  
-  const topSkillGap = skillAnalytics.length > 0 ? skillAnalytics[0].skill_name : 'N/A';
+  const topSkillGap = (skillAnalytics || []).length > 0 && skillAnalytics[0].count > 0 
+    ? skillAnalytics[0].skill_name 
+    : 'None';
 
   const stats: StatItem[] = [
     { label: 'Total Applications', value: totalApplications, icon: Layers, color: 'text-blue-500', bg: 'bg-blue-500/10' },

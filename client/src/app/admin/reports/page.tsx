@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default function SkillGapsPage() {
+export default function AdminReportsPage() {
   redirect('/admin/analytics');
 }

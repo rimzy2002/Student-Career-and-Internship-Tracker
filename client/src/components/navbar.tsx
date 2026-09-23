@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { GraduationCap, LogOut, Settings, User } from 'lucide-react'
+import { GraduationCap, LogOut, User } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -29,8 +29,24 @@ export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultU
   const [userRole, setUserRole] = useState<'student' | 'admin'>(defaultUserRole);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   // Check local storage on mount
   useEffect(() => {
@@ -78,9 +94,9 @@ export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultU
   ];
 
   const adminLinks = [
+    { name: 'Dashboard', url: '/admin/dashboard' },
     { name: 'Analytics', url: '/admin/analytics' },
     { name: 'Cohorts', url: '/admin/cohorts' },
-    { name: 'Reports', url: '/admin/reports' },
   ];
 
   const currentLinks = !isLoggedIn ? loggedOutLinks : (userRole === 'student' ? studentLinks : adminLinks);
@@ -150,10 +166,9 @@ export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultU
               ) : (
                 <>
                   {/* Avatar Dropdown */}
-                  <div className="relative">
+                  <div ref={dropdownRef} className="relative">
                     <button 
                       onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                      onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
                       className="flex items-center justify-center h-9 w-9 rounded-full bg-blue-900 border border-blue-700 hover:ring-2 ring-blue-500 transition-all focus:outline-none"
                     >
                       <span className="text-sm font-medium text-blue-100 uppercase">
@@ -177,19 +192,17 @@ export function Navbar({ isAuthPage = false, defaultIsLoggedIn = false, defaultU
                           </p>
                         </div>
                         <div className="py-2">
-                          <button className="w-full flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors">
-                            <User className="mr-3 h-4 w-4" /> Profile
-                          </button>
-                          <button className="w-full flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors">
-                            <Settings className="mr-3 h-4 w-4" /> Settings
-                          </button>
+                          <Link
+                            href={userRole === 'admin' ? '/admin/dashboard' : '/student/profile'}
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="w-full flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                          >
+                            <User className="mr-3 h-4 w-4" /> {userRole === 'admin' ? 'Dashboard' : 'Profile'}
+                          </Link>
                         </div>
                         <div className="py-2 border-t border-white/10">
                           <button 
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleLogout();
-                            }}
+                            onClick={handleLogout}
                             className="w-full flex items-center px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
                           >
                             <LogOut className="mr-3 h-4 w-4" /> Log out

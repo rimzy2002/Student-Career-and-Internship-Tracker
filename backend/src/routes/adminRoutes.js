@@ -11,5 +11,7 @@ router.use(requireRole('admin'));
 
 router.get('/analytics/skills', adminController.getSkillsAnalytics);
 router.get('/analytics/applications', adminController.getApplicationsAnalytics);
+router.get('/analytics/students', adminController.getStudentsAnalytics);
+router.get('/cohorts', adminController.getCohortsAnalytics);
 
 module.exports = router;

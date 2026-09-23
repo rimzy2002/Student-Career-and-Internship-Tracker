@@ -1,1 +1,5 @@
-export default function Page() { return <div>(admin)/analytics/placement-rates/page.tsx</div>; }
+import { redirect } from 'next/navigation';
+
+export default function PlacementRatesPage() {
+  redirect('/admin/analytics');
+}

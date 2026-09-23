@@ -11,7 +11,7 @@ import { API_BASE_URL } from '@/lib/api';
 
 export default function DashboardPage() {
   const [applications, setApplications] = useState<Application[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -115,7 +115,7 @@ export default function DashboardPage() {
 
           {/* Right Column: Widgets */}
           <div className="xl:col-span-1">
-            <CalendarWidget />
+            <CalendarWidget applications={applications} />
           </div>
           
         </div>

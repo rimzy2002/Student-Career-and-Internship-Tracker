@@ -144,16 +144,11 @@ CREATE TABLE IF NOT EXISTS application_feedback_skills (
     PRIMARY KEY (feedback_id, skill_id)
 );
 
--- 9. SEED DATA: Default Admin Account
--- Pre-generated bcrypt hash for 'AdminPassword123!'
-INSERT INTO users (first_name, last_name, email, password_hash, role)
-VALUES (
-    'Career', 
-    'Admin', 
-    'admin@university.edu', 
-    '$2b$10$w8.3f6.E1T1jV.z2O3eH2e/tFm3bY2B4I2B8D8F4j8B4F8B8B8B8B',
-    'admin'
-) ON CONFLICT (email) DO UPDATE SET role = 'admin';
+-- 9. INITIAL ADMIN ACCOUNT:
+-- For production security, default admin accounts and pre-generated hashes are NOT seeded via SQL.
+-- Use the secure environment-driven backend bootstrap script instead:
+--   cd backend && npm run create-admin
+
 
 -- =============================================================
 -- 10. Performance Indexes

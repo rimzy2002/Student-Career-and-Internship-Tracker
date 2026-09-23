@@ -1,1 +1,5 @@
-export default function Page() { return <div>(admin)/analytics/funnel/page.tsx</div>; }
+import { redirect } from 'next/navigation';
+
+export default function FunnelPage() {
+  redirect('/admin/analytics');
+}
