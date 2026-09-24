@@ -42,6 +42,17 @@ interface ScoringBreakdown {
   };
 }
 
+interface SkillDetail {
+  skill: string;
+  matchedRequirement?: string;
+  satisfiedBy?: string;
+  candidateSource?: string;
+  jobEvidence?: string;
+  status?: string;
+  type?: string;
+  category?: string;
+}
+
 interface MatchResult {
   overall_score: number;
   scoring_breakdown: ScoringBreakdown;
@@ -51,6 +62,8 @@ interface MatchResult {
     matched_preferred: string[];
     missing_preferred: string[];
   };
+  matchedSkills?: SkillDetail[];
+  missingSkills?: SkillDetail[];
   recommendations: {
     resume_changes: string[];
     learning_priorities: string[];
@@ -332,39 +345,70 @@ export default function ResumeMatchPage() {
               <div className="bg-white dark:bg-gray-800/90 rounded-2xl p-6 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-4">
                 <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-base">
                   <CheckCircle2 className="w-5 h-5" />
-                  Matched Skills ({matchResult.skills_analysis.matched_mandatory.length + matchResult.skills_analysis.matched_preferred.length})
+                  Matched Skills ({matchResult.matchedSkills ? matchResult.matchedSkills.length : (matchResult.skills_analysis.matched_mandatory.length + matchResult.skills_analysis.matched_preferred.length)})
                 </div>
                 
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-xs font-medium text-gray-400 block mb-1.5">Mandatory Matched:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {matchResult.skills_analysis.matched_mandatory.length > 0 ? (
-                        matchResult.skills_analysis.matched_mandatory.map((skill, idx) => (
-                          <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">None matched yet</span>
-                      )}
+                  {matchResult.matchedSkills && matchResult.matchedSkills.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {matchResult.matchedSkills.map((item, idx) => (
+                        <div key={idx} className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/50 flex flex-col gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sm text-emerald-900 dark:text-emerald-100">
+                              {item.skill}
+                            </span>
+                            {item.candidateSource && (
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                                Source: {item.candidateSource}
+                              </span>
+                            )}
+                          </div>
+                          {item.satisfiedBy && item.satisfiedBy !== item.skill && (
+                            <div className="text-xs text-emerald-700 dark:text-emerald-300">
+                              Satisfied by: <span className="font-medium">{item.satisfiedBy}</span>
+                            </div>
+                          )}
+                          {item.jobEvidence && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                              Job evidence: &ldquo;{item.jobEvidence}&rdquo;
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-xs font-medium text-gray-400 block mb-1.5">Mandatory Matched:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {matchResult.skills_analysis.matched_mandatory.length > 0 ? (
+                            matchResult.skills_analysis.matched_mandatory.map((skill, idx) => (
+                              <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">None matched yet</span>
+                          )}
+                        </div>
+                      </div>
 
-                  <div>
-                    <span className="text-xs font-medium text-gray-400 block mb-1.5">Preferred Matched:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {matchResult.skills_analysis.matched_preferred.length > 0 ? (
-                        matchResult.skills_analysis.matched_preferred.map((skill, idx) => (
-                          <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">None matched yet</span>
-                      )}
-                    </div>
-                  </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-400 block mb-1.5">Preferred Matched:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {matchResult.skills_analysis.matched_preferred.length > 0 ? (
+                            matchResult.skills_analysis.matched_preferred.map((skill, idx) => (
+                              <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">None matched yet</span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -372,39 +416,67 @@ export default function ResumeMatchPage() {
               <div className="bg-white dark:bg-gray-800/90 rounded-2xl p-6 border border-gray-100 dark:border-gray-700/50 shadow-sm space-y-4">
                 <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-semibold text-base">
                   <AlertCircle className="w-5 h-5" />
-                  Missing Critical Requirements ({matchResult.skills_analysis.missing_mandatory.length + matchResult.skills_analysis.missing_preferred.length})
+                  Missing Critical Requirements ({matchResult.missingSkills ? matchResult.missingSkills.length : (matchResult.skills_analysis.missing_mandatory.length + matchResult.skills_analysis.missing_preferred.length)})
                 </div>
 
                 <div className="space-y-3">
-                  <div>
-                    <span className="text-xs font-medium text-gray-400 block mb-1.5">Missing Mandatory (Priority):</span>
-                    <div className="flex flex-wrap gap-2">
-                      {matchResult.skills_analysis.missing_mandatory.length > 0 ? (
-                        matchResult.skills_analysis.missing_mandatory.map((skill, idx) => (
-                          <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-emerald-600 italic">All mandatory skills matched!</span>
-                      )}
+                  {matchResult.missingSkills && matchResult.missingSkills.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {matchResult.missingSkills.map((item, idx) => (
+                        <div key={idx} className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/70 dark:border-rose-800/50 flex flex-col gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sm text-rose-900 dark:text-rose-100">
+                              {item.skill}
+                            </span>
+                            {item.category === 'preferred' && (
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                                Preferred
+                              </span>
+                            )}
+                          </div>
+                          {item.jobEvidence && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                              Job evidence: &ldquo;{item.jobEvidence}&rdquo;
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : matchResult.missingSkills && matchResult.missingSkills.length === 0 ? (
+                    <span className="text-xs text-emerald-600 italic">All requirements matched!</span>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-xs font-medium text-gray-400 block mb-1.5">Missing Mandatory (Priority):</span>
+                        <div className="flex flex-wrap gap-2">
+                          {matchResult.skills_analysis.missing_mandatory.length > 0 ? (
+                            matchResult.skills_analysis.missing_mandatory.map((skill, idx) => (
+                              <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-emerald-600 italic">All mandatory skills matched!</span>
+                          )}
+                        </div>
+                      </div>
 
-                  <div>
-                    <span className="text-xs font-medium text-gray-400 block mb-1.5">Missing Preferred:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {matchResult.skills_analysis.missing_preferred.length > 0 ? (
-                        matchResult.skills_analysis.missing_preferred.map((skill, idx) => (
-                          <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                            {skill}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">None missing</span>
-                      )}
-                    </div>
-                  </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-400 block mb-1.5">Missing Preferred:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {matchResult.skills_analysis.missing_preferred.length > 0 ? (
+                            matchResult.skills_analysis.missing_preferred.map((skill, idx) => (
+                              <span key={idx} className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">None missing</span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
